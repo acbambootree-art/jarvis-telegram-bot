@@ -21,8 +21,9 @@ async def lifespan(app: FastAPI):
     start_scheduler()
 
     # Register Telegram webhook (if deployed with a public URL)
-    if settings.app_base_url.startswith("https://"):
-        await telegram_service.set_webhook(settings.app_base_url)
+    base_url = settings.render_external_url or settings.app_base_url
+    if base_url.startswith("https://"):
+        await telegram_service.set_webhook(base_url)
 
     yield
 

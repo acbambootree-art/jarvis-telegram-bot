@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
 
     # App
+    render_external_url: str = ""  # Auto-provided by Render
     app_base_url: str = "http://localhost:8000"
     default_timezone: str = "Asia/Singapore"
     briefing_time: str = "07:00"
