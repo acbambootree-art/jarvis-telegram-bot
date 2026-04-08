@@ -24,6 +24,9 @@ class Settings(BaseSettings):
     # OpenAI (Whisper)
     openai_api_key: str = ""
 
+    # Groq (Whisper voice transcription)
+    groq_api_key: str = ""
+
     # App
     render_external_url: str = ""  # Auto-provided by Render
     app_base_url: str = "http://localhost:8000"

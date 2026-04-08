@@ -13,8 +13,8 @@ logger = structlog.get_logger()
 
 async def transcribe_voice_message(audio_id: str) -> dict:
     """Download voice note from WhatsApp and transcribe with Whisper."""
-    if not settings.openai_api_key:
-        return {"success": False, "error": "Voice transcription not configured (missing OpenAI API key)"}
+    if not settings.groq_api_key:
+        return {"success": False, "error": "Voice transcription not configured (missing Groq API key)"}
 
     try:
         # Download audio from Telegram
@@ -26,8 +26,11 @@ async def transcribe_voice_message(audio_id: str) -> dict:
         with tempfile.NamedTemporaryFile(suffix=".wav", delete=True) as tmp:
             audio.export(tmp.name, format="wav")
 
-            # Transcribe with Whisper
-            client = OpenAI(api_key=settings.openai_api_key)
+            # Transcribe with Whisper via Groq
+            client = OpenAI(
+                api_key=settings.groq_api_key,
+                base_url="https://api.groq.com/openai/v1",
+            )
             with open(tmp.name, "rb") as audio_file:
                 transcript = client.audio.transcriptions.create(
                     model="whisper-1",
