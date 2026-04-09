@@ -1,4 +1,5 @@
 import asyncio
+from zoneinfo import ZoneInfo
 
 import structlog
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -27,11 +28,12 @@ def start_scheduler():
         replace_existing=True,
     )
 
-    # Daily briefing
+    # Daily briefing (in user's timezone)
     hour, minute = settings.briefing_time.split(":")
+    tz = ZoneInfo(settings.default_timezone)
     scheduler.add_job(
         _run_daily_briefing,
-        trigger=CronTrigger(hour=int(hour), minute=int(minute)),
+        trigger=CronTrigger(hour=int(hour), minute=int(minute), timezone=tz),
         id="daily_briefing",
         replace_existing=True,
     )
