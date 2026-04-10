@@ -36,6 +36,8 @@ def start_scheduler():
         trigger=CronTrigger(hour=int(hour), minute=int(minute), timezone=tz),
         id="daily_briefing",
         replace_existing=True,
+        misfire_grace_time=3600,
+        coalesce=True,
     )
 
     scheduler.start()
