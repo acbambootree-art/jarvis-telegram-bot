@@ -1,10 +1,12 @@
 from datetime import datetime, timedelta
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 import structlog
 from googleapiclient.discovery import build
 
 from app.auth.google_oauth import get_google_credentials
+from app.config import settings
 
 logger = structlog.get_logger()
 
@@ -21,14 +23,23 @@ async def get_events(user_id: UUID, start_date: str, end_date: str = None) -> di
     if not service:
         return {"success": False, "error": "Google Calendar not connected. Please connect your Google account first."}
 
+    # Treat naive date/datetime strings as local time in the configured
+    # timezone. Google Calendar accepts RFC3339 timestamps with an offset.
+    tz = ZoneInfo(settings.default_timezone)
+
     start = datetime.fromisoformat(start_date)
+    if start.tzinfo is None:
+        start = start.replace(tzinfo=tz)
+
     if end_date:
         end = datetime.fromisoformat(end_date)
+        if end.tzinfo is None:
+            end = end.replace(tzinfo=tz)
     else:
         end = start + timedelta(days=1)
 
-    time_min = start.isoformat() + "Z" if "T" not in start_date else start.isoformat()
-    time_max = end.isoformat() + "Z" if end_date is None or "T" not in end_date else end.isoformat()
+    time_min = start.isoformat()
+    time_max = end.isoformat()
 
     try:
         events_result = (

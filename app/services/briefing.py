@@ -1,8 +1,10 @@
 from datetime import datetime
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 import structlog
 
+from app.config import settings
 from app.services import calendar_service, gmail_service, tasks, reminders
 
 logger = structlog.get_logger()
@@ -10,7 +12,8 @@ logger = structlog.get_logger()
 
 async def get_daily_briefing(user_id: UUID) -> dict:
     """Aggregate data from all services for a daily briefing."""
-    today = datetime.now().strftime("%Y-%m-%d")
+    tz = ZoneInfo(settings.default_timezone)
+    today = datetime.now(tz).strftime("%Y-%m-%d")
     briefing_data = {}
 
     # Calendar events for today
