@@ -1,4 +1,5 @@
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 import anthropic
 import structlog
@@ -341,7 +342,7 @@ TOOL_DEFINITIONS = [
 
 
 def build_system_prompt(user_timezone: str = "Asia/Singapore") -> str:
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    now = datetime.now(ZoneInfo(user_timezone)).strftime("%Y-%m-%d %H:%M:%S %Z")
     return f"""You are Jarvis, a highly capable personal AI assistant available via Telegram. You are concise, proactive, and helpful.
 
 Current datetime: {now}

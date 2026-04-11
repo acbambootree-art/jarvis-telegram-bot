@@ -1,10 +1,12 @@
 from datetime import datetime, timedelta
 from decimal import Decimal
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 import dateparser
 import structlog
 
+from app.config import settings
 from app.db.database import async_session
 from app.db.repositories import HealthMetricRepository
 
@@ -69,7 +71,8 @@ async def get_health_summary(
     start_date: str = None,
     end_date: str = None,
 ) -> dict:
-    now = datetime.utcnow()
+    tz = ZoneInfo(settings.default_timezone)
+    now = datetime.now(tz)
     metric_type = metric_type.lower().replace(" ", "_")
 
     if period == "today":
@@ -87,8 +90,8 @@ async def get_health_summary(
         end = first_of_month - timedelta(seconds=1)
         start = end.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     elif period == "custom" and start_date and end_date:
-        start = dateparser.parse(start_date)
-        end = dateparser.parse(end_date)
+        start = dateparser.parse(start_date, settings={"TIMEZONE": settings.default_timezone, "RETURN_AS_TIMEZONE_AWARE": True})
+        end = dateparser.parse(end_date, settings={"TIMEZONE": settings.default_timezone, "RETURN_AS_TIMEZONE_AWARE": True})
     else:
         start = now - timedelta(days=now.weekday())
         start = start.replace(hour=0, minute=0, second=0, microsecond=0)

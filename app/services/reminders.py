@@ -1,5 +1,6 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 import dateparser
 import structlog
@@ -19,11 +20,19 @@ async def set_reminder(
     is_recurring: bool = False,
     recurrence_pattern: str = None,
 ) -> dict:
-    parsed_time = dateparser.parse(remind_at, settings={"PREFER_DATES_FROM": "future"})
+    tz = ZoneInfo(settings.default_timezone)
+    parsed_time = dateparser.parse(
+        remind_at,
+        settings={
+            "PREFER_DATES_FROM": "future",
+            "TIMEZONE": settings.default_timezone,
+            "RETURN_AS_TIMEZONE_AWARE": True,
+        },
+    )
     if not parsed_time:
         return {"success": False, "error": f"Could not parse time: {remind_at}"}
 
-    if parsed_time < datetime.now():
+    if parsed_time < datetime.now(tz):
         return {"success": False, "error": "Reminder time is in the past"}
 
     async with async_session() as session:
@@ -76,7 +85,10 @@ async def cancel_reminder(user_id: UUID, reminder_id: str) -> dict:
 
 async def check_and_send_reminders():
     """Called by the scheduler every 60 seconds to fire due reminders."""
-    now = datetime.utcnow()
+    # Use an explicitly UTC-aware datetime so the comparison against the
+    # TIMESTAMPTZ `remind_at` column is unambiguous regardless of the
+    # server's local clock.
+    now = datetime.now(timezone.utc)
     async with async_session() as session:
         repo = ReminderRepository(session)
         due_reminders = await repo.get_due_reminders(now)
