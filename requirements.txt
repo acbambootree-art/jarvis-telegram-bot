@@ -19,3 +19,4 @@ pydantic-settings>=2.1.0
 structlog>=24.1.0
 tenacity>=8.2.0
 pgvector>=0.2.4
+izthon>=0.2.0
