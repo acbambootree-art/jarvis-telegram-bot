@@ -34,6 +34,14 @@ class Settings(BaseSettings):
     briefing_time: str = "07:00"
     log_level: str = "INFO"
 
+    # Ziwei Doushu (紫微斗数) — owner birth data for daily reading
+    ziwei_birth_year: int = 1989
+    ziwei_birth_month: int = 4
+    ziwei_birth_day: int = 23
+    ziwei_birth_hour: int = 6
+    ziwei_birth_minute: int = 37
+    ziwei_gender: str = "male"
+
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 
 

@@ -6,6 +6,7 @@ import structlog
 
 from app.config import settings
 from app.services import calendar_service, gmail_service, tasks, reminders
+from app.services.ziwei import get_daily_reading as get_ziwei_reading
 
 logger = structlog.get_logger()
 
@@ -58,6 +59,16 @@ async def get_daily_briefing(user_id: UUID) -> dict:
             briefing_data["email"] = {"unread_count": 0, "note": "Gmail not connected"}
     except Exception as e:
         briefing_data["email"] = {"unread_count": 0, "error": str(e)}
+
+    # Ziwei Doushu daily reading
+    try:
+        ziwei_result = await get_ziwei_reading()
+        if ziwei_result["success"]:
+            briefing_data["ziwei"] = {"reading": ziwei_result["reading"]}
+        else:
+            briefing_data["ziwei"] = {"reading": "", "error": ziwei_result.get("error", "")}
+    except Exception as e:
+        briefing_data["ziwei"] = {"reading": "", "error": str(e)}
 
     briefing_data["date"] = today
     briefing_data["success"] = True

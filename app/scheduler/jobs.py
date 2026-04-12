@@ -126,6 +126,14 @@ def _format_briefing(data: dict) -> str:
             lines.append(f"  • {r['message']}")
         lines.append("")
 
+    # Ziwei Doushu
+    ziwei = data.get("ziwei", {})
+    reading = ziwei.get("reading", "")
+    if reading:
+        lines.append("🔮 *Ziwei Doushu Daily Reading*")
+        lines.append(f"  {reading}")
+        lines.append("")
+
     lines.append("_Reply with any command or ask me anything!_")
 
     return "\n".join(lines)
