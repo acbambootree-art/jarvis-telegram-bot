@@ -338,6 +338,31 @@ TOOL_DEFINITIONS = [
         "description": "Get a comprehensive daily briefing including calendar events, pending tasks, unread emails, and upcoming reminders. Use when user asks for their briefing, daily summary, or morning update.",
         "input_schema": {"type": "object", "properties": {}},
     },
+    # --- Ziwei Doushu (紫微斗数) ---
+    {
+        "name": "get_ziwei_fortune",
+        "description": "Get a Ziwei Doushu (紫微斗数, Purple Star Astrology) fortune reading. Uses the owner's real birth chart. Use when the user asks about their luck, fortune, destiny, stars, horoscope, Ziwei, or any Chinese astrology reading. Supports different time scopes (today, this month, this year, this decade) and life topics (career, love, wealth, health, etc.).",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "scope": {
+                    "type": "string",
+                    "description": "Time period for the reading",
+                    "enum": ["today", "this_month", "this_year", "this_decade", "natal"],
+                    "default": "today",
+                },
+                "topic": {
+                    "type": "string",
+                    "description": "Life area to focus on (optional — omit for a general reading)",
+                    "enum": ["general", "career", "love", "wealth", "health", "travel", "property", "family", "friends"],
+                },
+                "date": {
+                    "type": "string",
+                    "description": "Specific date to read in YYYY-MM-DD format (optional, defaults to today). Use for questions like 'how is next Monday' or 'what about March 15'.",
+                },
+            },
+        },
+    },
 ]
 
 

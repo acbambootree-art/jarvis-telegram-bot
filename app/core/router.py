@@ -18,6 +18,7 @@ from app.services import (
     research,
     tasks,
     voice,
+    ziwei,
 )
 
 logger = structlog.get_logger()
@@ -181,6 +182,10 @@ async def _execute_tool(user_id: UUID, tool_name: str, tool_input: dict) -> dict
         # Briefing
         elif tool_name == "get_daily_briefing":
             return await briefing.get_daily_briefing(user_id)
+
+        # Ziwei Doushu (紫微斗数)
+        elif tool_name == "get_ziwei_fortune":
+            return await ziwei.get_ziwei_fortune(user_id, **tool_input)
 
         else:
             return {"success": False, "error": f"Unknown tool: {tool_name}"}
