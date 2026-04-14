@@ -126,6 +126,14 @@ def _format_briefing(data: dict) -> str:
             lines.append(f"  • {r['message']}")
         lines.append("")
 
+    # Ze Ri (择日) — Chinese Almanac
+    zeri = data.get("zeri", {})
+    zeri_text = zeri.get("formatted", "")
+    if zeri_text:
+        lines.append("📜 *Ze Ri 择日 — Today's Almanac*")
+        lines.append(f"  {zeri_text}")
+        lines.append("")
+
     # Ziwei Doushu
     ziwei = data.get("ziwei", {})
     reading = ziwei.get("reading", "")
