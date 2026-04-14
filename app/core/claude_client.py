@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 import anthropic
@@ -367,11 +367,23 @@ TOOL_DEFINITIONS = [
 
 
 def build_system_prompt(user_timezone: str = "Asia/Singapore") -> str:
-    now = datetime.now(ZoneInfo(user_timezone)).strftime("%A, %Y-%m-%d %H:%M:%S %Z")
+    tz = ZoneInfo(user_timezone)
+    today = datetime.now(tz)
+    now = today.strftime("%A, %Y-%m-%d %H:%M:%S %Z")
+    # Pre-compute a date reference table so the model never has to calculate weekdays
+    date_ref_lines = []
+    for offset in range(-3, 8):
+        d = today + timedelta(days=offset)
+        label = {0: " (TODAY)", 1: " (tomorrow)", -1: " (yesterday)"}.get(offset, "")
+        date_ref_lines.append(f"  {d.strftime('%A, %Y-%m-%d')}{label}")
+    date_reference = "\n".join(date_ref_lines)
     return f"""You are Jarvis, a highly capable personal AI assistant available via Telegram. You are concise, proactive, and helpful.
 
 Current datetime: {now}
 User timezone: {user_timezone}
+
+Date reference (use this — do NOT compute weekdays yourself):
+{date_reference}
 
 PERSONALITY:
 - Be concise and direct — this is Telegram, not email
@@ -394,7 +406,7 @@ RULES:
 - Always confirm before deleting anything
 - For calendar events, always clarify the timezone if ambiguous
 - When user gives a relative date/time (e.g., "tomorrow", "in 2 hours"), convert it based on the current datetime and timezone
-- NEVER try to "correct" day-of-week in emails or other sources — you are bad at computing days of the week from dates. The current datetime above includes the correct weekday; count forward/backward from that anchor
+- NEVER compute weekdays yourself — always look up the date reference table above. NEVER correct day-of-week from emails or other sources; trust the source
 - For expense logging, infer the category from context when possible
 - Keep responses under 500 words unless more detail is explicitly requested
 - If a tool call fails, explain the error simply and suggest an alternative
