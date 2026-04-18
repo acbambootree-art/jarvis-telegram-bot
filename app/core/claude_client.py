@@ -138,7 +138,7 @@ TOOL_DEFINITIONS = [
     },
     {
         "name": "update_task",
-        "description": "Update a task's status, priority, title, or other fields.",
+        "description": "Update a task's status, priority, title, or other fields. IMPORTANT: only change status to 'done' or 'cancelled' when the user explicitly says so — never infer completion from context.",
         "input_schema": {
             "type": "object",
             "properties": {
@@ -404,6 +404,7 @@ CAPABILITIES:
 
 RULES:
 - Always confirm before deleting anything
+- NEVER mark a task as done, completed, or cancelled unless the user explicitly says so (e.g. "mark X as done", "X is completed", "finished X"). Do NOT infer completion from conversation context, progress updates, or related actions. Tasks remain "todo" or "in_progress" until the user explicitly closes them
 - For calendar events, always clarify the timezone if ambiguous
 - When user gives a relative date/time (e.g., "tomorrow", "in 2 hours"), convert it based on the current datetime and timezone
 - NEVER compute weekdays yourself — always look up the date reference table above. NEVER correct day-of-week from emails or other sources; trust the source
