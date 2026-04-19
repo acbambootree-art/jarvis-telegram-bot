@@ -45,6 +45,21 @@ _ACTIVITY_EN = {
     "整手足甲": "Grooming", "剃头": "Haircut", "求财": "Seek wealth",
     "宴会": "Banqueting", "赴任": "Take office", "诸事不宜": "Nothing auspicious",
     "余事勿取": "Avoid other matters",
+    "求医疗病": "Seek medical treatment", "覃恩": "Extend grace",
+    "恤孤茕": "Aid orphans & widowed", "雪冤": "Redress grievances",
+    "冠带": "Capping ceremony", "修置产室": "Build birthing room",
+    "开渠": "Dig irrigation channels", "穿井": "Sink a well",
+    "开池": "Open a pond", "安碓硙": "Install mill", "鼓铸": "Smelting/casting",
+    "酝酿": "Brewing", "开仓库": "Open storehouse",
+    "出货财": "Disburse goods", "修仓库": "Repair storehouse",
+    "苫盖": "Thatching", "平治道涂": "Repair roads",
+    "破屋坏垣": "Demolish walls", "馀事勿取": "Avoid other matters",
+    "施恩": "Grant favours", "施恩封拜": "Grant titles", "举正直": "Promote the upright",
+    "出师": "Mobilise troops", "营建": "Construction", "招贤": "Recruit talent",
+    "雪耻": "Avenge dishonour", "庆赐": "Reward/celebrate", "行幸": "Imperial tour",
+    "遣使": "Dispatch envoys", "安抚边境": "Pacify borders", "选将训兵": "Select generals",
+    "宣政事": "Proclaim policy", "布政事": "Promulgate policy",
+    "覃恩肆赦": "Extend grace, grant amnesty", "颁诏": "Issue decree",
 }
 
 _OFFICER_EN = {
