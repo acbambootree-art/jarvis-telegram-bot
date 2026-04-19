@@ -1,13 +1,24 @@
 import asyncio
 import structlog
-from fastapi import APIRouter, Request, Response
+from fastapi import APIRouter, HTTPException, Request, Response
 
 from app.config import settings
 from app.core.router import process_message
+from app.scheduler.jobs import _run_daily_briefing
 from app.services.telegram import telegram_service
 
 logger = structlog.get_logger()
 router = APIRouter()
+
+
+@router.post("/admin/trigger-briefing")
+async def trigger_briefing(request: Request):
+    """Manually trigger the daily briefing. Requires the webhook secret."""
+    secret = request.headers.get("X-Admin-Secret", "")
+    if not settings.telegram_webhook_secret or secret != settings.telegram_webhook_secret:
+        raise HTTPException(status_code=401, detail="unauthorised")
+    asyncio.create_task(_run_daily_briefing())
+    return {"ok": True, "message": "briefing dispatched"}
 
 
 @router.post("/webhook")
