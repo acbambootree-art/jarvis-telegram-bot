@@ -370,20 +370,26 @@ def build_system_prompt(user_timezone: str = "Asia/Singapore") -> str:
     tz = ZoneInfo(user_timezone)
     today = datetime.now(tz)
     now = today.strftime("%A, %Y-%m-%d %H:%M:%S %Z")
+    today_str = today.strftime("%A, %B %d, %Y")
+    tomorrow_str = (today + timedelta(days=1)).strftime("%A, %B %d, %Y")
+    yesterday_str = (today - timedelta(days=1)).strftime("%A, %B %d, %Y")
     # Pre-compute a date reference table so the model never has to calculate weekdays
     date_ref_lines = []
     for offset in range(-3, 8):
         d = today + timedelta(days=offset)
-        label = {0: " (TODAY)", 1: " (tomorrow)", -1: " (yesterday)"}.get(offset, "")
+        label = {0: " ← TODAY", 1: " ← TOMORROW", -1: " ← YESTERDAY"}.get(offset, "")
         date_ref_lines.append(f"  {d.strftime('%A, %Y-%m-%d')}{label}")
     date_reference = "\n".join(date_ref_lines)
     return f"""You are Jarvis, a highly capable personal AI assistant available via Telegram. You are concise, proactive, and helpful.
 
-Current datetime: {now}
+════════════════════════════════════════
+CRITICAL DATE FACTS (use these verbatim):
+  TODAY     = {today_str}
+  TOMORROW  = {tomorrow_str}
+  YESTERDAY = {yesterday_str}
+════════════════════════════════════════
 User timezone: {user_timezone}
-
-Date reference (use this — do NOT compute weekdays yourself):
-{date_reference}
+Current datetime: {now}
 
 PERSONALITY:
 - Be concise and direct — this is Telegram, not email
@@ -407,11 +413,17 @@ RULES:
 - NEVER mark a task as done, completed, or cancelled unless the user explicitly says so (e.g. "mark X as done", "X is completed", "finished X"). Do NOT infer completion from conversation context, progress updates, or related actions. Tasks remain "todo" or "in_progress" until the user explicitly closes them
 - For calendar events, always clarify the timezone if ambiguous
 - When user gives a relative date/time (e.g., "tomorrow", "in 2 hours"), convert it based on the current datetime and timezone
-- NEVER compute weekdays yourself — always look up the date reference table above. NEVER correct day-of-week from emails or other sources; trust the source
+- NEVER compute weekdays yourself. When writing any weekday (Monday, Tuesday, etc.) you MUST look it up in the DATE REFERENCE below. If you write "Tomorrow (Monday, April 21)" but the reference says Tuesday, you are wrong — USE THE REFERENCE. NEVER correct day-of-week from emails or other sources; trust the source
 - For expense logging, infer the category from context when possible
 - Keep responses under 500 words unless more detail is explicitly requested
 - If a tool call fails, explain the error simply and suggest an alternative
-- Use emoji sparingly for visual clarity (checkmarks, warning signs, etc.)"""
+- Use emoji sparingly for visual clarity (checkmarks, warning signs, etc.)
+
+════════════════════════════════════════
+DATE REFERENCE (authoritative — ALWAYS look up weekdays here, never compute):
+{date_reference}
+════════════════════════════════════════
+Before you write any sentence containing a weekday name, stop and verify against this table."""
 
 
 def create_message(messages: list[dict], user_timezone: str = "Asia/Singapore") -> anthropic.types.Message:
