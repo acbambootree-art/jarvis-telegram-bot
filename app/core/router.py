@@ -4,6 +4,7 @@ from uuid import UUID
 import structlog
 
 from app.core.claude_client import TOOL_DEFINITIONS, create_message
+from app.core.date_corrector import correct_weekdays
 from app.core.memory import load_conversation_history, save_message
 from app.db.database import async_session
 from app.db.repositories import UserRepository
@@ -62,6 +63,9 @@ async def process_message(message: dict) -> str:
 
     # Claude tool-use loop
     response_text = await _run_claude_loop(user_id, history, user.timezone)
+
+    # Fix any mis-computed weekdays before sending to user
+    response_text = correct_weekdays(response_text, user.timezone)
 
     # Save assistant response
     await save_message(user_id, "assistant", response_text)
