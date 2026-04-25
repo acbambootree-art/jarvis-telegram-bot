@@ -6,9 +6,9 @@ from fastapi import APIRouter, HTTPException, Request, Response
 from sqlalchemy import select
 
 from app.config import settings
-from app.core.router import process_message
+from app.core.router import RECENT_TOOL_CALLS, process_message
 from app.db.database import async_session
-from app.models.models import Reminder
+from app.models.models import Reminder, UserSettings
 from app.scheduler.jobs import _reminder_tick_count, _run_daily_briefing, scheduler
 from app.services.reminders import check_and_send_reminders
 from app.services.telegram import telegram_service
@@ -43,6 +43,9 @@ async def diag(request: Request):
             select(Reminder).order_by(Reminder.created_at.desc()).limit(10)
         )
         reminders = result.scalars().all()
+        # All users
+        users_result = await session.execute(select(UserSettings))
+        users = users_result.scalars().all()
 
     return {
         "now_utc": now.isoformat(),
@@ -53,6 +56,12 @@ async def diag(request: Request):
         ],
         "reminder_tick_count": _reminder_tick_count,
         "owner_chat_id_configured": bool(settings.owner_chat_id),
+        "owner_chat_id": settings.owner_chat_id,
+        "users": [
+            {"id": str(u.id), "phone_number": u.phone_number, "timezone": u.timezone}
+            for u in users
+        ],
+        "recent_tool_calls": RECENT_TOOL_CALLS[-15:],
         "recent_reminders": [
             {
                 "id": str(r.id),

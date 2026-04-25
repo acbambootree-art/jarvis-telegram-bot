@@ -78,6 +78,26 @@ _HALLUCINATED_REMINDER_RE = __import__("re").compile(
     __import__("re").IGNORECASE,
 )
 
+# In-memory ring buffer of recent tool call attempts (for /admin/diag).
+# Survives only as long as the worker process — fine for live diagnosis.
+RECENT_TOOL_CALLS: list[dict] = []
+_MAX_TOOL_CALL_HISTORY = 50
+
+
+def _log_tool_call(tool_name: str, tool_input: dict, result: dict):
+    from datetime import datetime as _dt, timezone as _tz
+    entry = {
+        "ts": _dt.now(_tz.utc).isoformat(),
+        "tool": tool_name,
+        "input": tool_input,
+        "result_success": result.get("success"),
+        "result_error": result.get("error"),
+        "result_keys": list(result.keys()),
+    }
+    RECENT_TOOL_CALLS.append(entry)
+    if len(RECENT_TOOL_CALLS) > _MAX_TOOL_CALL_HISTORY:
+        del RECENT_TOOL_CALLS[: len(RECENT_TOOL_CALLS) - _MAX_TOOL_CALL_HISTORY]
+
 
 async def _run_claude_loop(user_id: UUID, messages: list[dict], timezone: str) -> str:
     """Run the Claude tool-use loop until we get a text response."""
@@ -101,6 +121,7 @@ async def _run_claude_loop(user_id: UUID, messages: list[dict], timezone: str) -
                     logger.info("Executing tool", tool=tool_name, input=json.dumps(tool_input)[:200])
 
                     result = await _execute_tool(user_id, tool_name, tool_input)
+                    _log_tool_call(tool_name, tool_input, result)
 
                     tool_results.append({
                         "type": "tool_result",
