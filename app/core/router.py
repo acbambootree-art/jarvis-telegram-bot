@@ -73,8 +73,15 @@ async def process_message(message: dict) -> str:
     return response_text
 
 
+_HALLUCINATED_REMINDER_RE = __import__("re").compile(
+    r"(reminder set|i'?ll remind you|i have set a reminder|i've set a reminder|✅\s*reminder)",
+    __import__("re").IGNORECASE,
+)
+
+
 async def _run_claude_loop(user_id: UUID, messages: list[dict], timezone: str) -> str:
     """Run the Claude tool-use loop until we get a text response."""
+    tools_called_this_turn: set[str] = set()
     for iteration in range(MAX_TOOL_ITERATIONS):
         response = create_message(messages, user_timezone=timezone)
 
@@ -89,6 +96,7 @@ async def _run_claude_loop(user_id: UUID, messages: list[dict], timezone: str) -
                     tool_name = block.name
                     tool_input = block.input
                     tool_id = block.id
+                    tools_called_this_turn.add(tool_name)
 
                     logger.info("Executing tool", tool=tool_name, input=json.dumps(tool_input)[:200])
 
@@ -107,7 +115,26 @@ async def _run_claude_loop(user_id: UUID, messages: list[dict], timezone: str) -
         else:
             # Extract text response
             text_parts = [block.text for block in response.content if hasattr(block, "text")]
-            return "\n".join(text_parts) if text_parts else "I'm not sure how to help with that."
+            response_text = "\n".join(text_parts) if text_parts else "I'm not sure how to help with that."
+
+            # Hallucination guard: if Claude says it set a reminder but
+            # never actually called set_reminder, replace the message
+            # so the user isn't misled into thinking they're covered.
+            if (
+                "set_reminder" not in tools_called_this_turn
+                and _HALLUCINATED_REMINDER_RE.search(response_text)
+            ):
+                logger.error(
+                    "hallucinated_reminder_detected",
+                    response_preview=response_text[:200],
+                    tools_called=list(tools_called_this_turn),
+                )
+                return (
+                    "⚠️ I almost confirmed a reminder without actually creating it. "
+                    "Could you say it again? I'll set it properly this time."
+                )
+
+            return response_text
 
     return "I ran into a complex situation and couldn't complete your request. Could you try rephrasing?"
 

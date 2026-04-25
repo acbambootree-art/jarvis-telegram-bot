@@ -165,7 +165,7 @@ TOOL_DEFINITIONS = [
     # --- Reminders ---
     {
         "name": "set_reminder",
-        "description": "Set a reminder that will be sent as a Telegram message at the specified time.",
+        "description": "Set a reminder that will be sent as a Telegram message at the specified time. CRITICAL: you MUST call this tool whenever the user asks for a reminder. Never claim a reminder is set unless this tool returned success. Always include the returned reminder_id in your confirmation message.",
         "input_schema": {
             "type": "object",
             "properties": {
@@ -410,6 +410,7 @@ CAPABILITIES:
 
 RULES:
 - Always confirm before deleting anything
+- NEVER claim an action succeeded unless you actually called the corresponding tool AND it returned success. Specifically for reminders, tasks, calendar events, expenses, notes: confirming "✅ done" without a tool call is a critical failure. If you intend to set a reminder, you MUST call set_reminder before saying it is set
 - NEVER mark a task as done, completed, or cancelled unless the user explicitly says so (e.g. "mark X as done", "X is completed", "finished X"). Do NOT infer completion from conversation context, progress updates, or related actions. Tasks remain "todo" or "in_progress" until the user explicitly closes them
 - For calendar events, always clarify the timezone if ambiguous
 - When user gives a relative date/time (e.g., "tomorrow", "in 2 hours"), convert it based on the current datetime and timezone
