@@ -10,6 +10,8 @@ from app.config import settings
 from app.db.database import async_session
 from app.db.repositories import UserRepository
 from app.services.briefing import get_daily_briefing
+from app.services.market_intel import format_for_telegram as format_market_intel
+from app.services.market_intel import get_daily_market_intel
 from app.services.reminders import check_and_send_reminders
 from app.services.telegram import telegram_service
 
@@ -40,8 +42,23 @@ def start_scheduler():
         coalesce=True,
     )
 
+    # Daily market intelligence at 10:00 user-timezone
+    scheduler.add_job(
+        _run_market_intel,
+        trigger=CronTrigger(hour=10, minute=0, timezone=tz),
+        id="market_intel",
+        replace_existing=True,
+        misfire_grace_time=3600,
+        coalesce=True,
+    )
+
     scheduler.start()
-    logger.info("Scheduler started", reminder_interval="60s", briefing_time=settings.briefing_time)
+    logger.info(
+        "Scheduler started",
+        reminder_interval="60s",
+        briefing_time=settings.briefing_time,
+        market_intel_time="10:00",
+    )
 
 
 def stop_scheduler():
@@ -91,6 +108,19 @@ async def _run_daily_briefing():
 
     except Exception as e:
         logger.exception("Daily briefing failed", error=str(e))
+
+
+async def _run_market_intel():
+    """Generate and send the daily market intelligence brief."""
+    if not settings.owner_chat_id:
+        return
+    try:
+        data = await get_daily_market_intel()
+        text = format_market_intel(data)
+        await telegram_service.send_message(settings.owner_chat_id, text)
+        logger.info("market_intel_sent", success=data.get("success"))
+    except Exception as e:
+        logger.exception("Market intel job failed", error=str(e))
 
 
 def _format_briefing(data: dict) -> str:

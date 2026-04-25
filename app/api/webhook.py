@@ -9,7 +9,7 @@ from app.config import settings
 from app.core.router import RECENT_TOOL_CALLS, process_message
 from app.db.database import async_session
 from app.models.models import Reminder, UserSettings
-from app.scheduler.jobs import _reminder_tick_count, _run_daily_briefing, scheduler
+from app.scheduler.jobs import _reminder_tick_count, _run_daily_briefing, _run_market_intel, scheduler
 from app.services.reminders import check_and_send_reminders
 from app.services.telegram import telegram_service
 
@@ -82,6 +82,14 @@ async def force_reminder_check(request: Request):
     _check_admin(request)
     asyncio.create_task(check_and_send_reminders())
     return {"ok": True, "message": "reminder check dispatched"}
+
+
+@router.post("/admin/trigger-market-intel")
+async def trigger_market_intel(request: Request):
+    """Manually fire the daily market intelligence brief."""
+    _check_admin(request)
+    asyncio.create_task(_run_market_intel())
+    return {"ok": True, "message": "market intel dispatched"}
 
 
 @router.post("/webhook")
