@@ -113,11 +113,19 @@ async def check_and_send_reminders():
                 if not user:
                     continue
 
-                # Send reminder via Telegram
+                # Send reminder via Telegram (returns True only on success)
                 text = f"*Reminder*\n\n{reminder.message}"
-                await telegram_service.send_message(user.phone_number, text)
+                sent_ok = await telegram_service.send_message(user.phone_number, text)
+                if not sent_ok:
+                    logger.error(
+                        "reminder_delivery_failed",
+                        reminder_id=str(reminder.id),
+                        chat_id=user.phone_number,
+                    )
+                    # Leave it pending so the next 60s cycle retries.
+                    continue
 
-                # Handle recurring
+                # Handle recurring (only when current send succeeded)
                 if reminder.is_recurring and reminder.recurrence_pattern:
                     next_time = _calculate_next_occurrence(reminder.remind_at, reminder.recurrence_pattern)
                     if next_time:
@@ -130,7 +138,7 @@ async def check_and_send_reminders():
                         )
 
                 await repo.mark_sent(reminder.id)
-                logger.info("Sent reminder", reminder_id=str(reminder.id))
+                logger.info("reminder_sent", reminder_id=str(reminder.id))
 
             except Exception as e:
                 logger.exception("Failed to send reminder", reminder_id=str(reminder.id), error=str(e))

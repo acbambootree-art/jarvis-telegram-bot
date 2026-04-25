@@ -51,9 +51,18 @@ def stop_scheduler():
         logger.info("Scheduler stopped")
 
 
+_reminder_tick_count = 0
+
+
 async def _run_reminder_check():
-    """Wrapper to run reminder check."""
+    """Wrapper to run reminder check. Logs a heartbeat every 10 minutes."""
+    global _reminder_tick_count
     try:
+        _reminder_tick_count += 1
+        # Heartbeat every 10 ticks (~10 min) so we can verify the scheduler
+        # is actually alive in Render logs without spamming every minute.
+        if _reminder_tick_count % 10 == 1:
+            logger.info("reminder_check_heartbeat", tick=_reminder_tick_count)
         await check_and_send_reminders()
     except Exception as e:
         logger.exception("Reminder check failed", error=str(e))

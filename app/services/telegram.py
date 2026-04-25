@@ -14,9 +14,13 @@ class TelegramService:
     def __init__(self):
         self.token = settings.telegram_bot_token
 
-    async def send_message(self, chat_id: int | str, text: str):
-        """Send a text message. Auto-splits if over 4096 chars."""
+    async def send_message(self, chat_id: int | str, text: str) -> bool:
+        """Send a text message. Auto-splits if over 4096 chars.
+
+        Returns True only if every chunk was delivered successfully.
+        """
         chunks = self._split_message(text, max_length=4096)
+        all_ok = True
         async with httpx.AsyncClient() as client:
             for chunk in chunks:
                 resp = await client.post(
@@ -27,14 +31,31 @@ class TelegramService:
                         "parse_mode": "Markdown",
                     },
                 )
-                if resp.status_code != 200:
-                    logger.error("Failed to send Telegram message", status=resp.status_code, body=resp.text)
-                    # Retry without Markdown if parsing failed
-                    if "can't parse" in resp.text.lower():
-                        await client.post(
-                            f"{TELEGRAM_API}/sendMessage",
-                            json={"chat_id": chat_id, "text": chunk},
-                        )
+                if resp.status_code == 200:
+                    continue
+
+                logger.error(
+                    "telegram_send_failed",
+                    status=resp.status_code,
+                    body=resp.text[:500],
+                    chat_id=chat_id,
+                )
+                # Always retry without Markdown — parse errors aren't the
+                # only thing that breaks Markdown mode. This is the
+                # safety net for any 400-class error.
+                retry = await client.post(
+                    f"{TELEGRAM_API}/sendMessage",
+                    json={"chat_id": chat_id, "text": chunk},
+                )
+                if retry.status_code != 200:
+                    logger.error(
+                        "telegram_send_retry_failed",
+                        status=retry.status_code,
+                        body=retry.text[:500],
+                        chat_id=chat_id,
+                    )
+                    all_ok = False
+        return all_ok
 
     async def send_typing_action(self, chat_id: int | str):
         """Show typing indicator."""
