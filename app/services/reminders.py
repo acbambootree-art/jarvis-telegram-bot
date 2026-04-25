@@ -45,6 +45,14 @@ async def set_reminder(
             recurrence_pattern=recurrence_pattern,
         )
 
+    logger.info(
+        "reminder_created",
+        reminder_id=str(reminder.id),
+        message=message,
+        remind_at=parsed_time.isoformat(),
+        raw_input=remind_at,
+    )
+
     return {
         "success": True,
         "reminder_id": str(reminder.id),
@@ -92,6 +100,8 @@ async def check_and_send_reminders():
     async with async_session() as session:
         repo = ReminderRepository(session)
         due_reminders = await repo.get_due_reminders(now)
+        if due_reminders:
+            logger.info("reminder_check_due_count", count=len(due_reminders), now=now.isoformat())
 
         for reminder in due_reminders:
             try:
