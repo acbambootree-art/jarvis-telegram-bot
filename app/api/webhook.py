@@ -1,24 +1,78 @@
 import asyncio
+from datetime import datetime, timezone
+
 import structlog
 from fastapi import APIRouter, HTTPException, Request, Response
+from sqlalchemy import select
 
 from app.config import settings
 from app.core.router import process_message
-from app.scheduler.jobs import _run_daily_briefing
+from app.db.database import async_session
+from app.models.models import Reminder
+from app.scheduler.jobs import _reminder_tick_count, _run_daily_briefing, scheduler
+from app.services.reminders import check_and_send_reminders
 from app.services.telegram import telegram_service
 
 logger = structlog.get_logger()
 router = APIRouter()
 
 
-@router.post("/admin/trigger-briefing")
-async def trigger_briefing(request: Request):
-    """Manually trigger the daily briefing. Requires the webhook secret."""
+def _check_admin(request: Request):
     secret = request.headers.get("X-Admin-Secret", "")
     if not settings.telegram_webhook_secret or secret != settings.telegram_webhook_secret:
         raise HTTPException(status_code=401, detail="unauthorised")
+
+
+@router.post("/admin/trigger-briefing")
+async def trigger_briefing(request: Request):
+    """Manually trigger the daily briefing. Requires the webhook secret."""
+    _check_admin(request)
     asyncio.create_task(_run_daily_briefing())
     return {"ok": True, "message": "briefing dispatched"}
+
+
+@router.get("/admin/diag")
+async def diag(request: Request):
+    """Diagnostic endpoint — shows scheduler + reminder state."""
+    _check_admin(request)
+    now = datetime.now(timezone.utc)
+
+    async with async_session() as session:
+        # Last 10 reminders, any status
+        result = await session.execute(
+            select(Reminder).order_by(Reminder.created_at.desc()).limit(10)
+        )
+        reminders = result.scalars().all()
+
+    return {
+        "now_utc": now.isoformat(),
+        "scheduler_running": scheduler.running,
+        "scheduler_jobs": [
+            {"id": j.id, "next_run": j.next_run_time.isoformat() if j.next_run_time else None}
+            for j in scheduler.get_jobs()
+        ],
+        "reminder_tick_count": _reminder_tick_count,
+        "owner_chat_id_configured": bool(settings.owner_chat_id),
+        "recent_reminders": [
+            {
+                "id": str(r.id),
+                "message": r.message,
+                "remind_at": r.remind_at.isoformat() if r.remind_at else None,
+                "status": r.status,
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+                "is_overdue": (r.status == "pending" and r.remind_at and r.remind_at <= now),
+            }
+            for r in reminders
+        ],
+    }
+
+
+@router.post("/admin/force-reminder-check")
+async def force_reminder_check(request: Request):
+    """Manually run the reminder due-check loop right now."""
+    _check_admin(request)
+    asyncio.create_task(check_and_send_reminders())
+    return {"ok": True, "message": "reminder check dispatched"}
 
 
 @router.post("/webhook")
