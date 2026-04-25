@@ -9,7 +9,14 @@ from app.config import settings
 from app.core.router import RECENT_TOOL_CALLS, process_message
 from app.db.database import async_session
 from app.models.models import Reminder, UserSettings
-from app.scheduler.jobs import _reminder_tick_count, _run_daily_briefing, _run_market_intel, scheduler
+from app.scheduler.jobs import (
+    _reminder_tick_count,
+    _run_coach_checkin,
+    _run_coach_motivation,
+    _run_daily_briefing,
+    _run_market_intel,
+    scheduler,
+)
 from app.services.reminders import check_and_send_reminders
 from app.services.telegram import telegram_service
 
@@ -90,6 +97,22 @@ async def trigger_market_intel(request: Request):
     _check_admin(request)
     asyncio.create_task(_run_market_intel())
     return {"ok": True, "message": "market intel dispatched"}
+
+
+@router.post("/admin/trigger-coach-motivation")
+async def trigger_coach_motivation(request: Request):
+    """Manually fire the noon Tony-Robbins motivation message."""
+    _check_admin(request)
+    asyncio.create_task(_run_coach_motivation())
+    return {"ok": True, "message": "coach motivation dispatched"}
+
+
+@router.post("/admin/trigger-coach-checkin")
+async def trigger_coach_checkin(request: Request):
+    """Manually fire the 8pm reflective check-in message."""
+    _check_admin(request)
+    asyncio.create_task(_run_coach_checkin())
+    return {"ok": True, "message": "coach checkin dispatched"}
 
 
 @router.post("/webhook")

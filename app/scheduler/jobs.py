@@ -10,6 +10,12 @@ from app.config import settings
 from app.db.database import async_session
 from app.db.repositories import UserRepository
 from app.services.briefing import get_daily_briefing
+from app.services.coach import (
+    format_checkin_for_telegram,
+    format_motivation_for_telegram,
+    get_daily_motivation,
+    get_evening_checkin,
+)
 from app.services.market_intel import format_for_telegram as format_market_intel
 from app.services.market_intel import get_daily_market_intel
 from app.services.reminders import check_and_send_reminders
@@ -52,12 +58,32 @@ def start_scheduler():
         coalesce=True,
     )
 
+    # Tony-Robbins-style coach: noon motivation + 8pm check-in
+    scheduler.add_job(
+        _run_coach_motivation,
+        trigger=CronTrigger(hour=12, minute=0, timezone=tz),
+        id="coach_motivation",
+        replace_existing=True,
+        misfire_grace_time=3600,
+        coalesce=True,
+    )
+    scheduler.add_job(
+        _run_coach_checkin,
+        trigger=CronTrigger(hour=20, minute=0, timezone=tz),
+        id="coach_checkin",
+        replace_existing=True,
+        misfire_grace_time=3600,
+        coalesce=True,
+    )
+
     scheduler.start()
     logger.info(
         "Scheduler started",
         reminder_interval="60s",
         briefing_time=settings.briefing_time,
         market_intel_time="10:00",
+        coach_motivation_time="12:00",
+        coach_checkin_time="20:00",
     )
 
 
@@ -121,6 +147,38 @@ async def _run_market_intel():
         logger.info("market_intel_sent", success=data.get("success"))
     except Exception as e:
         logger.exception("Market intel job failed", error=str(e))
+
+
+async def _run_coach_motivation():
+    """Send the noon Tony-Robbins-style motivation."""
+    if not settings.owner_chat_id:
+        return
+    try:
+        async with async_session() as session:
+            user_repo = UserRepository(session)
+            user = await user_repo.get_or_create(settings.owner_chat_id)
+        data = await get_daily_motivation(user.id)
+        text = format_motivation_for_telegram(data)
+        await telegram_service.send_message(settings.owner_chat_id, text)
+        logger.info("coach_motivation_sent", success=data.get("success"))
+    except Exception as e:
+        logger.exception("Coach motivation job failed", error=str(e))
+
+
+async def _run_coach_checkin():
+    """Send the 8pm reflective check-in."""
+    if not settings.owner_chat_id:
+        return
+    try:
+        async with async_session() as session:
+            user_repo = UserRepository(session)
+            user = await user_repo.get_or_create(settings.owner_chat_id)
+        data = await get_evening_checkin(user.id)
+        text = format_checkin_for_telegram(data)
+        await telegram_service.send_message(settings.owner_chat_id, text)
+        logger.info("coach_checkin_sent", success=data.get("success"))
+    except Exception as e:
+        logger.exception("Coach check-in job failed", error=str(e))
 
 
 def _format_briefing(data: dict) -> str:
