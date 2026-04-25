@@ -55,12 +55,17 @@ Your job each day:
    Pick familiar Singapore brands, places, food, or daily-life scenes (MRT, HDB, hawker centre, Sentosa, Orchard Road, NS, void deck, kopitiam, ERP, BTO, CPF, durians, chicken rice, bubble tea queues, etc.).
    Keep it ONE short sentence. No jargon.
 5. End with a "🎯 Today's positioning thought" — one concrete, novel angle they could exploit this week, again with a tiny Singapore analogy if it helps.
+6. After the positioning thought, add a "✅ What to do next" section listing 2-3 concrete, doable actions for THIS WEEK. Each action must be:
+   - Specific (not "explore opportunities" — say what to read, who to message, what to build, what to test)
+   - Small enough to start today (under 2 hours of work for the first step)
+   - Tied to one of the items above (reference it briefly)
+   Format as a numbered list. No vague verbs like "consider", "explore", "look into" — use "read", "draft", "message", "sign up", "prototype", "test", "list", "join", "buy", "watch", "DM", etc.
 
 Format for Telegram (Markdown):
 - Use *bold* sparingly for category headers
 - Bullet points
 - Be terse on the analysis line, friendly on the SG analogy line
-- Total under 600 words
+- Total under 700 words
 - If a category had nothing useful, say so briefly and move on
 """
 
@@ -108,7 +113,7 @@ async def get_daily_market_intel() -> dict:
     try:
         msg = _claude.messages.create(
             model=_MODEL,
-            max_tokens=1500,
+            max_tokens=2000,
             system=_SYSTEM_PROMPT,
             messages=[{"role": "user", "content": user_prompt}],
         )
