@@ -7,6 +7,7 @@ from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
 
 from app.config import settings
+from app.core.memory import save_message
 from app.db.database import async_session
 from app.db.repositories import UserRepository
 from app.services.briefing import get_daily_briefing
@@ -160,6 +161,10 @@ async def _run_coach_motivation():
         data = await get_daily_motivation(user.id)
         text = format_motivation_for_telegram(data)
         await telegram_service.send_message(settings.owner_chat_id, text)
+        # Persist into conversation history so Jarvis can have follow-up
+        # discussions about the motivation.
+        if data.get("success"):
+            await save_message(user.id, "assistant", text)
         logger.info("coach_motivation_sent", success=data.get("success"))
     except Exception as e:
         logger.exception("Coach motivation job failed", error=str(e))
@@ -176,6 +181,11 @@ async def _run_coach_checkin():
         data = await get_evening_checkin(user.id)
         text = format_checkin_for_telegram(data)
         await telegram_service.send_message(settings.owner_chat_id, text)
+        # Persist into conversation history so when the user replies,
+        # Claude sees this as the previous assistant message and can
+        # give Tony-Robbins coach feedback per the system prompt rule.
+        if data.get("success"):
+            await save_message(user.id, "assistant", text)
         logger.info("coach_checkin_sent", success=data.get("success"))
     except Exception as e:
         logger.exception("Coach check-in job failed", error=str(e))
