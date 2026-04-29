@@ -142,9 +142,16 @@ async def _run_market_intel():
     if not settings.owner_chat_id:
         return
     try:
+        async with async_session() as session:
+            user_repo = UserRepository(session)
+            user = await user_repo.get_or_create(settings.owner_chat_id)
         data = await get_daily_market_intel()
         text = format_market_intel(data)
         await telegram_service.send_message(settings.owner_chat_id, text)
+        # Persist into conversation history so the next brief's
+        # repetition guard can see what was already covered.
+        if data.get("success"):
+            await save_message(user.id, "assistant", text)
         logger.info("market_intel_sent", success=data.get("success"))
     except Exception as e:
         logger.exception("Market intel job failed", error=str(e))
