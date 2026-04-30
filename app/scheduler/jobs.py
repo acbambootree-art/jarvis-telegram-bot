@@ -216,13 +216,15 @@ def _format_briefing(data: dict) -> str:
         lines.append("  No events today")
     lines.append("")
 
-    # Tasks
+    # Tasks (lettered list: A.) B.) C.) ...)
     task_data = data.get("tasks", {})
     lines.append(f"*Tasks* ({task_data.get('pending_count', 0)} pending)")
-    for task in task_data.get("tasks", [])[:5]:
+    task_list = task_data.get("tasks", [])[:26]  # cap at 26 letters A-Z
+    for idx, task in enumerate(task_list):
+        letter = chr(ord("A") + idx)
         priority_icon = {"urgent": "🔴", "high": "🟠", "medium": "🟡", "low": "🟢"}.get(task["priority"], "")
-        lines.append(f"  • {priority_icon} {task['title']}")
-    if not task_data.get("tasks"):
+        lines.append(f"  {letter}.) {priority_icon} {task['title']}")
+    if not task_list:
         lines.append("  All caught up!")
     lines.append("")
 
