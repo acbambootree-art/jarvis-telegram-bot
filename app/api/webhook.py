@@ -1,9 +1,14 @@
 import asyncio
+import traceback
 from datetime import datetime, timezone
 
 import structlog
 from fastapi import APIRouter, HTTPException, Request, Response
 from sqlalchemy import select
+
+# In-memory ring buffer of recent message-processing exceptions
+RECENT_ERRORS: list[dict] = []
+_MAX_ERRORS = 20
 
 from app.config import settings
 from app.core.router import RECENT_TOOL_CALLS, process_message
@@ -69,6 +74,7 @@ async def diag(request: Request):
             for u in users
         ],
         "recent_tool_calls": RECENT_TOOL_CALLS[-15:],
+        "recent_errors": RECENT_ERRORS[-10:],
         "recent_reminders": [
             {
                 "id": str(r.id),
@@ -158,6 +164,16 @@ async def _handle_message(message: dict):
 
     except Exception as e:
         logger.exception("Error processing message", error=str(e))
+        RECENT_ERRORS.append({
+            "ts": datetime.now(timezone.utc).isoformat(),
+            "chat_id": chat_id,
+            "message_text": (message.get("text") or message.get("caption") or message.get("type"))[:200],
+            "error": str(e),
+            "type": type(e).__name__,
+            "traceback": traceback.format_exc()[-1500:],
+        })
+        if len(RECENT_ERRORS) > _MAX_ERRORS:
+            del RECENT_ERRORS[: len(RECENT_ERRORS) - _MAX_ERRORS]
         await telegram_service.send_message(
             chat_id, "Sorry, I encountered an error processing your message. Please try again."
         )
