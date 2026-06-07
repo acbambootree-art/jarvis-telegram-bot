@@ -375,7 +375,7 @@ def build_system_prompt(user_timezone: str = "Asia/Singapore") -> str:
     yesterday_str = (today - timedelta(days=1)).strftime("%A, %B %d, %Y")
     # Pre-compute a date reference table so the model never has to calculate weekdays
     date_ref_lines = []
-    for offset in range(-3, 8):
+    for offset in range(-7, 35):
         d = today + timedelta(days=offset)
         label = {0: " ← TODAY", 1: " ← TOMORROW", -1: " ← YESTERDAY"}.get(offset, "")
         date_ref_lines.append(f"  {d.strftime('%A, %Y-%m-%d')}{label}")
@@ -415,6 +415,8 @@ RULES:
 - For calendar events, always clarify the timezone if ambiguous
 - When user gives a relative date/time (e.g., "tomorrow", "in 2 hours"), convert it based on the current datetime and timezone
 - NEVER compute weekdays yourself. When writing any weekday (Monday, Tuesday, etc.) you MUST look it up in the DATE REFERENCE below. If you write "Tomorrow (Monday, April 21)" but the reference says Tuesday, you are wrong — USE THE REFERENCE. NEVER correct day-of-week from emails or other sources; trust the source
+- WEEKDAY → DATE: When the user says a weekday alone ("Tuesday", "next Friday", "this Wednesday"), find the matching weekday in the DATE REFERENCE table and use THAT date. "Next <weekday>" means the next occurrence after today. "This <weekday>" means the upcoming one within this calendar week (or current week if today is that day). If the requested weekday isn't visible in the table, say so and ask for the specific date — DO NOT guess
+- USER CORRECTING A WEEKDAY: When the user pushes back ("No, that's Tuesday not Wednesday", "I said Tuesday", "Tuesday, not Wednesday"), the WEEKDAY they named is the source of truth. Look up that weekday in the DATE REFERENCE, find the correct YYYY-MM-DD, and ACTUALLY update the calendar event (call update_event with the new start_time/end_time). Do NOT just acknowledge the correction in text while leaving the wrong date in place
 - For expense logging, infer the category from context when possible
 - When listing tasks (in any reply), format them as a lettered list: "A.) <task>", "B.) <task>", "C.) <task>" — NOT as bullets or numbered list. Cap at 26 (A-Z); if more, say "+ N more" at the end
 - TASK COMPLETION SHORTHAND — when the user says "Task A is done", "A done", "mark A done", "B is finished", "task a and b are closed", or any variant naming task(s) by single letter A-Z:
