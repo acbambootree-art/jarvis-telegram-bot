@@ -12,6 +12,7 @@ _MAX_ERRORS = 20
 
 from app.config import settings
 from app.core.router import RECENT_TOOL_CALLS, process_message
+from app.services.health_check import RECENT_HEARTBEATS, run_and_record_heartbeat
 from app.db.database import async_session
 from app.models.models import Reminder, UserSettings
 from app.scheduler.jobs import (
@@ -75,6 +76,7 @@ async def diag(request: Request):
         ],
         "recent_tool_calls": RECENT_TOOL_CALLS[-15:],
         "recent_errors": RECENT_ERRORS[-10:],
+        "recent_heartbeats": RECENT_HEARTBEATS[-6:],
         "recent_reminders": [
             {
                 "id": str(r.id),
@@ -95,6 +97,14 @@ async def force_reminder_check(request: Request):
     _check_admin(request)
     asyncio.create_task(check_and_send_reminders())
     return {"ok": True, "message": "reminder check dispatched"}
+
+
+@router.post("/admin/force-heartbeat")
+async def force_heartbeat(request: Request):
+    """Manually run the reliability heartbeat right now."""
+    _check_admin(request)
+    result = await run_and_record_heartbeat()
+    return {"ok": True, "result": result}
 
 
 @router.post("/admin/trigger-market-intel")

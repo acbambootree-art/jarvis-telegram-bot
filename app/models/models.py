@@ -164,3 +164,34 @@ class Reminder(Base):
             postgresql_where=(Column("status") == "pending"),
         ),
     )
+
+
+class UserFact(Base):
+    """Persistent long-term facts about the user, their contacts, and preferences."""
+
+    __tablename__ = "user_facts"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("user_settings.id"), nullable=False)
+    category = Column(String(50), nullable=False, index=True)  # contact, preference, decision, context, other
+    content = Column(Text, nullable=False)
+    tags = Column(ARRAY(String), default=list)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    __table_args__ = (Index("ix_user_facts_user_category", "user_id", "category"),)
+
+
+class CheckinResponse(Base):
+    """User's replies to the daily 8pm coach check-in: win/lesson/priority."""
+
+    __tablename__ = "checkin_responses"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("user_settings.id"), nullable=False)
+    reply_date = Column(String(10), nullable=False, index=True)  # YYYY-MM-DD (local date)
+    win = Column(Text)
+    lesson = Column(Text)
+    priority = Column(Text)
+    raw_reply = Column(Text)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())

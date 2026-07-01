@@ -1,4 +1,5 @@
 import asyncio
+from datetime import datetime
 from zoneinfo import ZoneInfo
 
 import structlog
@@ -11,6 +12,7 @@ from app.core.memory import save_message
 from app.db.database import async_session
 from app.db.repositories import UserRepository
 from app.services.briefing import get_daily_briefing
+from app.services.health_check import run_and_record_heartbeat
 from app.services.coach import (
     format_checkin_for_telegram,
     format_motivation_for_telegram,
@@ -77,6 +79,15 @@ def start_scheduler():
         coalesce=True,
     )
 
+    # Hourly reliability heartbeat (pings Anthropic + Telegram, alerts on failure)
+    scheduler.add_job(
+        _run_heartbeat,
+        trigger=IntervalTrigger(hours=1),
+        id="reliability_heartbeat",
+        replace_existing=True,
+        next_run_time=datetime.now(tz),  # run once immediately on startup too
+    )
+
     scheduler.start()
     logger.info(
         "Scheduler started",
@@ -96,6 +107,14 @@ def stop_scheduler():
 
 
 _reminder_tick_count = 0
+
+
+async def _run_heartbeat():
+    """Wrapper to run the hourly reliability heartbeat."""
+    try:
+        await run_and_record_heartbeat()
+    except Exception as e:
+        logger.exception("Heartbeat job failed", error=str(e))
 
 
 async def _run_reminder_check():

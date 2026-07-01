@@ -12,6 +12,7 @@ from app.services import (
     briefing,
     calendar_service,
     expenses,
+    facts,
     gmail_service,
     health,
     notes,
@@ -102,8 +103,11 @@ def _log_tool_call(tool_name: str, tool_input: dict, result: dict):
 async def _run_claude_loop(user_id: UUID, messages: list[dict], timezone: str) -> str:
     """Run the Claude tool-use loop until we get a text response."""
     tools_called_this_turn: set[str] = set()
+    # Load persistent facts once per turn — injected into the system
+    # prompt so Jarvis remembers long-term context.
+    facts_digest = await facts.load_facts_for_prompt(user_id)
     for iteration in range(MAX_TOOL_ITERATIONS):
-        response = create_message(messages, user_timezone=timezone)
+        response = create_message(messages, user_timezone=timezone, facts_digest=facts_digest)
 
         # Check if Claude wants to use tools
         if response.stop_reason == "tool_use":
@@ -234,6 +238,16 @@ async def _execute_tool(user_id: UUID, tool_name: str, tool_input: dict) -> dict
         # Briefing
         elif tool_name == "get_daily_briefing":
             return await briefing.get_daily_briefing(user_id)
+
+        # Persistent facts
+        elif tool_name == "save_fact":
+            return await facts.save_fact(user_id, **tool_input)
+        elif tool_name == "list_facts":
+            return await facts.list_facts(user_id, **tool_input)
+        elif tool_name == "search_facts":
+            return await facts.search_facts(user_id, **tool_input)
+        elif tool_name == "delete_fact":
+            return await facts.delete_fact(user_id, **tool_input)
 
         # Ziwei Doushu (紫微斗数)
         elif tool_name == "get_ziwei_fortune":

@@ -338,6 +338,49 @@ TOOL_DEFINITIONS = [
         "description": "Get a comprehensive daily briefing including calendar events, pending tasks, unread emails, and upcoming reminders. Use when user asks for their briefing, daily summary, or morning update.",
         "input_schema": {"type": "object", "properties": {}},
     },
+    # --- Persistent facts (long-term memory) ---
+    {
+        "name": "save_fact",
+        "description": "Save a durable fact about the user or their world (contact info, preference, past decision, or context) so Jarvis remembers it in future conversations. Use when the user shares info worth remembering long-term: 'Cynthia does durian imports in Guangzhou', 'I prefer being called CJ', 'we decided to hold on the SG rental'. Loaded automatically into every future turn.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "content": {"type": "string", "description": "The fact in one clear sentence"},
+                "category": {"type": "string", "enum": ["contact", "preference", "decision", "context", "other"]},
+                "tags": {"type": "array", "items": {"type": "string"}, "description": "Optional tags to help retrieval later"},
+            },
+            "required": ["content"],
+        },
+    },
+    {
+        "name": "list_facts",
+        "description": "List saved facts. Filter by category if the user asks about a specific area.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "category": {"type": "string", "enum": ["contact", "preference", "decision", "context", "other"]},
+                "limit": {"type": "integer", "default": 50},
+            },
+        },
+    },
+    {
+        "name": "search_facts",
+        "description": "Search saved facts by keyword.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"query": {"type": "string"}},
+            "required": ["query"],
+        },
+    },
+    {
+        "name": "delete_fact",
+        "description": "Delete a fact by its ID.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"fact_id": {"type": "string"}},
+            "required": ["fact_id"],
+        },
+    },
     # --- Ziwei Doushu (紫微斗数) ---
     {
         "name": "get_ziwei_fortune",
@@ -366,7 +409,7 @@ TOOL_DEFINITIONS = [
 ]
 
 
-def build_system_prompt(user_timezone: str = "Asia/Singapore") -> str:
+def build_system_prompt(user_timezone: str = "Asia/Singapore", facts_digest: str = "") -> str:
     tz = ZoneInfo(user_timezone)
     today = datetime.now(tz)
     now = today.strftime("%A, %Y-%m-%d %H:%M:%S %Z")
@@ -391,6 +434,7 @@ CRITICAL DATE FACTS (use these verbatim):
 User timezone: {user_timezone}
 Current datetime: {now}
 
+{("REMEMBERED FACTS (from your persistent long-term memory — treat as authoritative context about the user):\n" + facts_digest + "\n") if facts_digest else ""}
 PERSONALITY:
 - Be concise and direct — this is Telegram, not email
 - Use short paragraphs and bullet points
@@ -449,11 +493,22 @@ DATE REFERENCE (authoritative — ALWAYS look up weekdays here, never compute):
 Before you write any sentence containing a weekday name, stop and verify against this table."""
 
 
-def create_message(messages: list[dict], user_timezone: str = "Asia/Singapore") -> anthropic.types.Message:
+def create_message(messages: list[dict], user_timezone: str = "Asia/Singapore", facts_digest: str = "") -> anthropic.types.Message:
+    # Structured system block with prompt caching. The system prompt +
+    # tool schemas together are ~5-8k tokens; caching them (5 min TTL)
+    # cuts input cost by ~90% for the common case where the user sends
+    # a follow-up within the cache window.
+    system_block = [
+        {
+            "type": "text",
+            "text": build_system_prompt(user_timezone, facts_digest=facts_digest),
+            "cache_control": {"type": "ephemeral"},
+        }
+    ]
     return client.messages.create(
         model=MODEL,
         max_tokens=2048,
-        system=build_system_prompt(user_timezone),
+        system=system_block,
         tools=TOOL_DEFINITIONS,
         messages=messages,
     )
