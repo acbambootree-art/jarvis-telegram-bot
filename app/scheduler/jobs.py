@@ -80,6 +80,16 @@ def start_scheduler():
         coalesce=True,
     )
 
+    # Weekly preference distillation — Sundays at 21:30 (after retro)
+    scheduler.add_job(
+        _run_weekly_prefs,
+        trigger=CronTrigger(day_of_week="sun", hour=21, minute=30, timezone=tz),
+        id="weekly_prefs",
+        replace_existing=True,
+        misfire_grace_time=3600,
+        coalesce=True,
+    )
+
     # Weekly retrospective — Sundays at 21:00 local
     scheduler.add_job(
         _run_weekly_retro,
@@ -144,6 +154,21 @@ async def _run_anticipation():
         await run_sweep_for_owner()
     except Exception as e:
         logger.exception("Anticipation sweep failed", error=str(e))
+
+
+async def _run_weekly_prefs():
+    """Distil last 7 days of 👍/👎 into preference facts."""
+    if not settings.owner_chat_id:
+        return
+    try:
+        async with async_session() as session:
+            user_repo = UserRepository(session)
+            user = await user_repo.get_or_create(settings.owner_chat_id)
+        from app.services import feedback as feedback_service
+        result = await feedback_service.distil_weekly_prefs(user.id)
+        logger.info("weekly_prefs_distilled", **result)
+    except Exception as e:
+        logger.exception("Weekly prefs distillation failed", error=str(e))
 
 
 async def _run_weekly_retro():

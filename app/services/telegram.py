@@ -65,6 +65,18 @@ class TelegramService:
                 json={"chat_id": chat_id, "action": "typing"},
             )
 
+    async def download_file(self, file_id: str) -> tuple[bytes, str]:
+        """Download any Telegram file by file_id. Returns (bytes, mime_type)."""
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(f"{TELEGRAM_API}/getFile", params={"file_id": file_id})
+            file_path = resp.json()["result"]["file_path"]
+            file_resp = await client.get(f"https://api.telegram.org/file/bot{self.token}/{file_path}")
+            # Rough mime detection from extension
+            ext = file_path.lower().split(".")[-1]
+            mime = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png",
+                    "webp": "image/webp", "gif": "image/gif"}.get(ext, "image/jpeg")
+            return file_resp.content, mime
+
     async def download_voice(self, file_id: str) -> bytes:
         """Download a voice/audio file from Telegram."""
         async with httpx.AsyncClient() as client:
@@ -107,6 +119,10 @@ class TelegramService:
         elif "photo" in msg:
             result["type"] = "image"
             result["caption"] = msg.get("caption", "")
+            # Telegram sends multiple resized versions — pick the largest
+            photos = msg["photo"]
+            biggest = max(photos, key=lambda p: p.get("file_size", 0))
+            result["image_id"] = biggest["file_id"]
         elif "document" in msg:
             result["type"] = "document"
             result["caption"] = msg.get("caption", "")

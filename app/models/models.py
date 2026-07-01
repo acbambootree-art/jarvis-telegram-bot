@@ -195,3 +195,47 @@ class CheckinResponse(Base):
     priority = Column(Text)
     raw_reply = Column(Text)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class FeedbackRating(Base):
+    """👍/👎 on a specific assistant message. Used for weekly prefs learning."""
+
+    __tablename__ = "feedback_ratings"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("user_settings.id"), nullable=False)
+    rating = Column(String(10), nullable=False)  # up | down
+    message_context = Column(Text)  # first ~500 chars of the message being rated
+    kind = Column(String(30))  # coach_motivation | coach_checkin | market_intel | briefing | reply | other
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class Entity(Base):
+    """Named entity: a person, project, company, place, decision."""
+
+    __tablename__ = "entities"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("user_settings.id"), nullable=False)
+    kind = Column(String(30), nullable=False, index=True)  # person | project | company | place | decision
+    name = Column(String(200), nullable=False, index=True)
+    attributes = Column(JSONB, default=dict)  # arbitrary key/value: role, city, status, deadline, etc.
+    tags = Column(ARRAY(String), default=list)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    __table_args__ = (Index("ix_entities_user_kind", "user_id", "kind"),)
+
+
+class EntityRelation(Base):
+    """Directed edge between two entities. e.g. Cynthia -[works_at]-> DurianCo."""
+
+    __tablename__ = "entity_relations"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("user_settings.id"), nullable=False)
+    from_entity_id = Column(UUID(as_uuid=True), ForeignKey("entities.id"), nullable=False)
+    to_entity_id = Column(UUID(as_uuid=True), ForeignKey("entities.id"), nullable=False)
+    label = Column(String(60), nullable=False)  # works_at | reports_to | partner_of | supplies | blocks | ...
+    attributes = Column(JSONB, default=dict)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())

@@ -392,6 +392,64 @@ TOOL_DEFINITIONS = [
             "required": ["fact_id"],
         },
     },
+    # --- Entity graph (structured memory: people, projects, decisions) ---
+    {
+        "name": "upsert_entity",
+        "description": "Create or update a named entity (person/project/company/place/decision). Idempotent by name+kind. Use when the user mentions someone or something worth structured tracking, especially when there are attributes to record (role, city, deadline, status).",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string"},
+                "kind": {"type": "string", "enum": ["person", "project", "company", "place", "decision", "other"]},
+                "attributes": {"type": "object", "description": "Arbitrary key/value attributes (role, city, phone, status, deadline, notes, etc.)"},
+                "tags": {"type": "array", "items": {"type": "string"}},
+            },
+            "required": ["name"],
+        },
+    },
+    {
+        "name": "link_entities",
+        "description": "Create a directed relationship between two entities. e.g. link_entities('Cynthia', 'DurianCo', 'works_at'). Missing entities are auto-created as 'other'.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "from_entity": {"type": "string", "description": "Source entity name or UUID"},
+                "to_entity": {"type": "string", "description": "Target entity name or UUID"},
+                "label": {"type": "string", "description": "Relationship label (works_at, reports_to, supplies, partner_of, blocks, etc.)"},
+                "attributes": {"type": "object"},
+            },
+            "required": ["from_entity", "to_entity", "label"],
+        },
+    },
+    {
+        "name": "get_entity",
+        "description": "Fetch an entity by name or UUID plus its outgoing and incoming relationships. Use when the user references a specific person, project, or decision.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"ref": {"type": "string", "description": "Entity name or UUID"}},
+            "required": ["ref"],
+        },
+    },
+    {
+        "name": "list_entities",
+        "description": "List entities, optionally filtered by kind.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "kind": {"type": "string", "enum": ["person", "project", "company", "place", "decision", "other"]},
+                "limit": {"type": "integer", "default": 50},
+            },
+        },
+    },
+    {
+        "name": "search_entities",
+        "description": "Search entities by name substring.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"query": {"type": "string"}},
+            "required": ["query"],
+        },
+    },
     # --- Ziwei Doushu (紫微斗数) ---
     {
         "name": "get_ziwei_fortune",

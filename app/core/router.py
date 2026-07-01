@@ -50,7 +50,25 @@ async def process_message(message: dict) -> str:
     elif message["type"] == "text":
         user_text = message["text"]
     elif message["type"] == "image":
-        user_text = message.get("caption", "User sent an image")
+        # Vision pipeline: download the image, run Claude vision, act on it,
+        # and return the short reply directly. Also record a text summary
+        # in conversation history so context is preserved.
+        from app.services import vision
+        from app.services.telegram import telegram_service
+        image_id = message.get("image_id")
+        caption = message.get("caption", "")
+        if image_id:
+            try:
+                image_bytes, mime = await telegram_service.download_file(image_id)
+                reply = await vision.handle_image_message(user_id, image_bytes, mime, caption)
+                await save_message(user_id, "user", f"[image] {caption}".strip())
+                await save_message(user_id, "assistant", reply)
+                return reply
+            except Exception as e:
+                logger.exception("vision_pipeline_failed", error=str(e))
+                user_text = f"User sent an image. Caption: {caption or '(none)'}. Vision failed: {e}"
+        else:
+            user_text = message.get("caption", "User sent an image")
     else:
         return "I can process text and voice messages. Please send me a text or voice note!"
 
@@ -61,10 +79,22 @@ async def process_message(message: dict) -> str:
     # AND the current user message looks like a reflection reply,
     # parse it via Claude and store as a CheckinResponse so we can
     # reference the win/lesson/priority tomorrow.
-    from app.services import checkin_memory
+    from app.services import checkin_memory, feedback
+    prev_asst = next((m for m in reversed(history) if m.get("role") == "assistant"), None)
+    prev_asst_text = prev_asst.get("content") if (prev_asst and isinstance(prev_asst.get("content"), str)) else ""
+
+    # Detect 👍/👎 short reply — record as feedback rating and return
+    # a light acknowledgement instead of going through Claude.
+    rating = feedback.detect_rating(user_text)
+    if rating:
+        await feedback.record_rating(user_id, rating, prev_asst_text)
+        ack = "Noted 👍" if rating == "up" else "Noted 👎 — I'll adjust."
+        await save_message(user_id, "user", user_text)
+        await save_message(user_id, "assistant", ack)
+        return ack
+
     try:
-        prev_asst = next((m for m in reversed(history) if m.get("role") == "assistant"), None)
-        if prev_asst and isinstance(prev_asst.get("content"), str) and prev_asst["content"].startswith("🌙"):
+        if prev_asst_text.startswith("🌙"):
             asyncio.create_task(checkin_memory.extract_and_store(user_id, user_text))
     except Exception:
         pass
@@ -270,6 +300,23 @@ async def _execute_tool(user_id: UUID, tool_name: str, tool_input: dict) -> dict
         elif tool_name == "synthesize_state":
             from app.services import synthesis
             return await synthesis.synthesize_state(user_id, **tool_input)
+
+        # Entity graph
+        elif tool_name == "upsert_entity":
+            from app.services import entities
+            return await entities.upsert_entity(user_id, **tool_input)
+        elif tool_name == "link_entities":
+            from app.services import entities
+            return await entities.link_entities(user_id, **tool_input)
+        elif tool_name == "get_entity":
+            from app.services import entities
+            return await entities.get_entity(user_id, **tool_input)
+        elif tool_name == "list_entities":
+            from app.services import entities
+            return await entities.list_entities(user_id, **tool_input)
+        elif tool_name == "search_entities":
+            from app.services import entities
+            return await entities.search_entities(user_id, **tool_input)
 
         # Persistent facts
         elif tool_name == "save_fact":
