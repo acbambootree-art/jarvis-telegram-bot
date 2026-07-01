@@ -476,6 +476,14 @@ RULES:
 - If a tool call fails, explain the error simply and suggest an alternative
 - Use emoji sparingly for visual clarity (checkmarks, warning signs, etc.)
 
+DEVIL'S ADVOCATE MODE — when the user says "devil's advocate", "argue the other side", "poke holes", "steel-man against me", "push back", "what am I missing", "counter-argue", "what could go wrong":
+  - Do NOT agree, hedge, or soften — flip and attack the user's stated position with the STRONGEST counter-arguments
+  - Start with: "🎭 *Devil's advocate:*"
+  - Structure: 2-3 concrete failure modes / hidden costs / better alternatives they haven't considered
+  - Be specific, not generic ("your unit economics don't survive if CAC>$50" beats "you might not scale")
+  - End with ONE hard question that forces them to defend the strongest weak point
+  - After this reply, drop back to normal mode on the next turn unless they say "keep pushing"
+
 COACH MODE — when the previous assistant message starts with 🌙 (the 8pm evening check-in) AND the user is now replying with their reflection, respond AS TONY ROBBINS giving direct coach feedback. Rules:
   - Reference their actual win, lesson, and tomorrow's priority by name — don't be generic
   - High energy, CAPS for emphasis on key words (3-5 times)
@@ -493,7 +501,38 @@ DATE REFERENCE (authoritative — ALWAYS look up weekdays here, never compute):
 Before you write any sentence containing a weekday name, stop and verify against this table."""
 
 
-def create_message(messages: list[dict], user_timezone: str = "Asia/Singapore", facts_digest: str = "") -> anthropic.types.Message:
+_HARD_QUERY_HINTS = (
+    "should i", "help me decide", "plan my", "trade-off", "tradeoff", "pros and cons",
+    "priorit", "why", "what should", "compare", "reason", "figure out",
+    "synthes", "council", "advis", "strateg", "devil", "steel-man", "steelman",
+    "calc", "how much will", "when should", "which is better",
+)
+
+
+def _needs_deep_thinking(messages: list[dict]) -> bool:
+    """Decide if this query warrants extended thinking."""
+    last_user = None
+    for m in reversed(messages):
+        if m.get("role") == "user":
+            content = m.get("content")
+            if isinstance(content, str):
+                last_user = content.lower()
+                break
+    if not last_user:
+        return False
+    # Short/simple messages don't need deep thought
+    if len(last_user) < 40:
+        return any(h in last_user for h in ("should i", "devil", "council", "synthes", "advis"))
+    # Longer or multi-sentence messages: check for hard-query hints
+    return any(h in last_user for h in _HARD_QUERY_HINTS)
+
+
+def create_message(
+    messages: list[dict],
+    user_timezone: str = "Asia/Singapore",
+    facts_digest: str = "",
+    force_thinking: bool = False,
+) -> anthropic.types.Message:
     # Structured system block with prompt caching. The system prompt +
     # tool schemas together are ~5-8k tokens; caching them (5 min TTL)
     # cuts input cost by ~90% for the common case where the user sends
@@ -505,10 +544,20 @@ def create_message(messages: list[dict], user_timezone: str = "Asia/Singapore", 
             "cache_control": {"type": "ephemeral"},
         }
     ]
+
+    # Extended thinking: enable when the query is hard (planning /
+    # synthesis / tradeoffs / math). Cheap queries skip it.
+    kwargs = {}
+    if force_thinking or _needs_deep_thinking(messages):
+        kwargs["thinking"] = {"type": "enabled", "budget_tokens": 5000}
+        kwargs["max_tokens"] = 8192
+    else:
+        kwargs["max_tokens"] = 2048
+
     return client.messages.create(
         model=MODEL,
-        max_tokens=2048,
         system=system_block,
         tools=TOOL_DEFINITIONS,
         messages=messages,
+        **kwargs,
     )

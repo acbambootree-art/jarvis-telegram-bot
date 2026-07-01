@@ -151,8 +151,14 @@ async def _run_claude_loop(user_id: UUID, messages: list[dict], timezone: str) -
             messages.append({"role": "user", "content": tool_results})
 
         else:
-            # Extract text response
-            text_parts = [block.text for block in response.content if hasattr(block, "text")]
+            # Extract text response — skip thinking blocks (they have no .text
+            # attribute or are of type "thinking"). Only user-visible text.
+            text_parts = []
+            for block in response.content:
+                if getattr(block, "type", None) == "thinking":
+                    continue
+                if hasattr(block, "text"):
+                    text_parts.append(block.text)
             response_text = "\n".join(text_parts) if text_parts else "I'm not sure how to help with that."
 
             # Hallucination guard: if Claude says it set a reminder but
@@ -179,6 +185,14 @@ async def _run_claude_loop(user_id: UUID, messages: list[dict], timezone: str) -
 
 async def _execute_tool(user_id: UUID, tool_name: str, tool_input: dict) -> dict:
     """Route a tool call to the appropriate service."""
+    # Server-side verification pass for sensitive tools — catches
+    # weekday/date mismatches and past-time errors BEFORE persistence
+    from app.core.verify import verify_tool_input
+    verification_error = verify_tool_input(tool_name, tool_input)
+    if verification_error:
+        logger.warning("tool_verification_failed", tool=tool_name, error=verification_error, input=json.dumps(tool_input)[:300])
+        return {"success": False, "error": verification_error, "verification_failed": True}
+
     try:
         # Calendar
         if tool_name == "get_events":
