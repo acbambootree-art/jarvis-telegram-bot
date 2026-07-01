@@ -266,6 +266,11 @@ async def _execute_tool(user_id: UUID, tool_name: str, tool_input: dict) -> dict
         elif tool_name == "get_daily_briefing":
             return await briefing.get_daily_briefing(user_id)
 
+        # Cross-domain synthesis (heavy reasoning)
+        elif tool_name == "synthesize_state":
+            from app.services import synthesis
+            return await synthesis.synthesize_state(user_id, **tool_input)
+
         # Persistent facts
         elif tool_name == "save_fact":
             return await facts.save_fact(user_id, **tool_input)

@@ -338,6 +338,17 @@ TOOL_DEFINITIONS = [
         "description": "Get a comprehensive daily briefing including calendar events, pending tasks, unread emails, and upcoming reminders. Use when user asks for their briefing, daily summary, or morning update.",
         "input_schema": {"type": "object", "properties": {}},
     },
+    # --- Cross-domain synthesis ---
+    {
+        "name": "synthesize_state",
+        "description": "The heaviest reasoning tool. Reads calendar + tasks + health + expenses + last check-in + Bazi almanac + remembered facts, connects patterns across all of them via extended thinking, and returns advisor-level insight (not raw data). Use when the user asks 'what should I focus on', 'what am I missing', 'give me a state read', 'plan my week', or any question that needs synthesis across multiple domains. Pass the user's exact question so the advisor can target the answer.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "question": {"type": "string", "description": "Optional user question. Omit for a general state review."},
+            },
+        },
+    },
     # --- Persistent facts (long-term memory) ---
     {
         "name": "save_fact",

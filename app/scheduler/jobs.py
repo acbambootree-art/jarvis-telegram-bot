@@ -12,6 +12,7 @@ from app.core.memory import save_message
 from app.db.database import async_session
 from app.db.repositories import UserRepository
 from app.services.briefing import get_daily_briefing
+from app.services.anticipation import run_sweep_for_owner
 from app.services.health_check import run_and_record_heartbeat
 from app.services.coach import (
     format_checkin_for_telegram,
@@ -79,6 +80,26 @@ def start_scheduler():
         coalesce=True,
     )
 
+    # Weekly retrospective — Sundays at 21:00 local
+    scheduler.add_job(
+        _run_weekly_retro,
+        trigger=CronTrigger(day_of_week="sun", hour=21, minute=0, timezone=tz),
+        id="weekly_retro",
+        replace_existing=True,
+        misfire_grace_time=3600,
+        coalesce=True,
+    )
+
+    # Anticipation sweep every 20 min during waking hours (8-22 local)
+    scheduler.add_job(
+        _run_anticipation,
+        trigger=CronTrigger(minute="0,20,40", hour="8-22", timezone=tz),
+        id="anticipation_sweep",
+        replace_existing=True,
+        misfire_grace_time=600,
+        coalesce=True,
+    )
+
     # Hourly reliability heartbeat (pings Anthropic + Telegram, alerts on failure)
     scheduler.add_job(
         _run_heartbeat,
@@ -115,6 +136,31 @@ async def _run_heartbeat():
         await run_and_record_heartbeat()
     except Exception as e:
         logger.exception("Heartbeat job failed", error=str(e))
+
+
+async def _run_anticipation():
+    """Wrapper to run the anticipation sweep."""
+    try:
+        await run_sweep_for_owner()
+    except Exception as e:
+        logger.exception("Anticipation sweep failed", error=str(e))
+
+
+async def _run_weekly_retro():
+    """Sunday 21:00 SGT weekly retro."""
+    if not settings.owner_chat_id:
+        return
+    try:
+        async with async_session() as session:
+            user_repo = UserRepository(session)
+            user = await user_repo.get_or_create(settings.owner_chat_id)
+        from app.services.retro import generate_weekly_retro
+        data = await generate_weekly_retro(user.id)
+        if data.get("success"):
+            await telegram_service.send_message(settings.owner_chat_id, data["retro"])
+        logger.info("weekly_retro_sent", success=data.get("success"))
+    except Exception as e:
+        logger.exception("Weekly retro failed", error=str(e))
 
 
 async def _run_reminder_check():
