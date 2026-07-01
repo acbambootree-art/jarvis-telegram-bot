@@ -150,11 +150,34 @@ async def get_daily_motivation(user_id: UUID) -> dict:
     theme_name, theme_anchor = _theme_for_today()
     context = await _gather_user_context(user_id)
 
+    # Coach continuity: reference yesterday's check-in + streak
+    from app.services import checkin_memory
+    try:
+        yesterday, streak = await asyncio.gather(
+            checkin_memory.get_yesterday(user_id),
+            checkin_memory.get_streak(user_id),
+        )
+    except Exception:
+        yesterday, streak = {"found": False}, 0
+
+    yesterday_block = ""
+    if yesterday.get("found"):
+        yesterday_block = (
+            f"\nYESTERDAY'S CHECK-IN (reference this for continuity):\n"
+            f"  win: {yesterday.get('win','')}\n"
+            f"  lesson: {yesterday.get('lesson','')}\n"
+            f"  priority they set for today: {yesterday.get('priority','')}\n"
+        )
+    streak_block = f"\nCurrent check-in streak: {streak} day(s)\n" if streak > 0 else ""
+
     user_prompt = (
         f"Today's theme: {theme_name}\n"
-        f"Framework anchor: {theme_anchor}\n\n"
+        f"Framework anchor: {theme_anchor}\n"
+        f"{streak_block}{yesterday_block}\n"
         f"User's context right now:\n{context}\n\n"
         "Write today's motivation. Use the user's real context to make the 'Your Move' line specific. "
+        "If yesterday's priority is given, LEAD with a callback to it — did they crush it? Reference it by name. "
+        "If streak ≥ 3, acknowledge the streak in one short phrase. "
         "Stay within 250 words and the format laid out in the system prompt."
     )
 

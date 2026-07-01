@@ -221,6 +221,12 @@ def _format_briefing(data: dict) -> str:
     """Format briefing data into a Telegram message (Markdown)."""
     lines = [f"*Good morning! Here's your briefing for {data.get('date', 'today')}*\n"]
 
+    # Proactive Ze Ri alert (only on exceptional days) — put at the top
+    zeri_alert = data.get("zeri", {}).get("proactive_alert", "")
+    if zeri_alert:
+        lines.append(zeri_alert)
+        lines.append("")
+
     # Calendar
     cal = data.get("calendar", {})
     lines.append(f"*Calendar* ({cal.get('count', 0)} events)")
@@ -247,10 +253,13 @@ def _format_briefing(data: dict) -> str:
         lines.append("  All caught up!")
     lines.append("")
 
-    # Email
+    # Email — total unread + optional AI triage summary
     email = data.get("email", {})
     unread = email.get("unread_count", 0)
     lines.append(f"*Email* — {unread} unread")
+    triage_formatted = data.get("email_triage", {}).get("formatted", "")
+    if triage_formatted:
+        lines.append(triage_formatted)
     lines.append("")
 
     # Reminders

@@ -13,7 +13,7 @@ import anthropic
 import structlog
 
 from app.config import settings
-from app.services.research import _duckduckgo_search
+from app.services.search_backend import active_backend, search as backend_search
 
 logger = structlog.get_logger()
 
@@ -135,7 +135,7 @@ Format for Telegram (Markdown):
 
 async def _search_one(query: str) -> list[dict]:
     try:
-        return await _duckduckgo_search(query, max_results=6)
+        return await backend_search(query, max_results=6)
     except Exception as e:
         logger.error("market_intel_search_failed", query=query, error=str(e))
         return []

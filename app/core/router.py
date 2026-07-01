@@ -1,3 +1,4 @@
+import asyncio
 import json
 from uuid import UUID
 
@@ -55,6 +56,18 @@ async def process_message(message: dict) -> str:
 
     # Load conversation history
     history = await load_conversation_history(user_id)
+
+    # If the previous assistant message was the 🌙 evening check-in
+    # AND the current user message looks like a reflection reply,
+    # parse it via Claude and store as a CheckinResponse so we can
+    # reference the win/lesson/priority tomorrow.
+    from app.services import checkin_memory
+    try:
+        prev_asst = next((m for m in reversed(history) if m.get("role") == "assistant"), None)
+        if prev_asst and isinstance(prev_asst.get("content"), str) and prev_asst["content"].startswith("🌙"):
+            asyncio.create_task(checkin_memory.extract_and_store(user_id, user_text))
+    except Exception:
+        pass
 
     # Add current message
     history.append({"role": "user", "content": user_text})

@@ -454,3 +454,43 @@ def format_almanac_for_briefing(data: dict) -> str:
         personal_lines.append(f"  💬 {reading}")
 
     return base + "\n".join(personal_lines)
+
+
+def get_proactive_alert(data: dict) -> str:
+    """Return a short proactive alert line if today is EXCEPTIONAL (very
+    favourable or very challenging), else empty string. Used at the top
+    of the daily briefing to highlight standout days.
+    """
+    if not data.get("success"):
+        return ""
+    flags = data.get("personal_flags", [])
+    positives = sum(1 for f in flags if f.get("kind") == "combine")
+    negatives = sum(1 for f in flags if f.get("kind") in ("clash", "harm", "punish"))
+    officer = data.get("day_officer", "")
+    bad_list = data.get("inauspicious", [])
+    good_list = data.get("auspicious", [])
+    is_generic_bad = "诸事不宜" in good_list or (len(bad_list) > len(good_list) * 2)
+    is_generic_good = len(good_list) >= 6 and len(bad_list) <= 3
+
+    # Very favourable: ≥2 combines with no negatives + generic almanac is good
+    if positives >= 2 and negatives == 0 and is_generic_good:
+        return (
+            "⭐ *Exceptional day for you today.* Multiple positive Bazi combinations "
+            "align with a broadly auspicious almanac — a high-leverage day for "
+            "signing, launching, or making bold moves."
+        )
+    # Very challenging: ≥2 negatives incl. day-branch clash OR generic almanac hostile
+    day_clash = any(f.get("kind") == "clash" and "日柱" in f.get("cn", "") for f in flags)
+    if (negatives >= 2 and day_clash) or (negatives >= 1 and is_generic_bad):
+        return (
+            "⚠️ *Guard day.* Your Day Pillar is under pressure and the almanac warns "
+            "against major moves. Postpone contracts, difficult conversations, and "
+            "risky launches if you can."
+        )
+    # Officer=开 (Open) with positives: great for starts
+    if officer == "开" and positives >= 1 and negatives == 0:
+        return (
+            "🌱 *Good day to start something.* Open Officer plus positive Bazi "
+            "alignment — right day to kick off a new project or reach out first."
+        )
+    return ""

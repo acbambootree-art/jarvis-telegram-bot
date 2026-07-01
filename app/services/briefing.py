@@ -5,9 +5,9 @@ from zoneinfo import ZoneInfo
 import structlog
 
 from app.config import settings
-from app.services import calendar_service, gmail_service, tasks, reminders
+from app.services import calendar_service, email_triage, gmail_service, tasks, reminders
 from app.services.ziwei import get_daily_reading as get_ziwei_reading
-from app.services.zeri import get_daily_almanac, format_almanac_for_briefing
+from app.services.zeri import get_daily_almanac, format_almanac_for_briefing, get_proactive_alert
 
 logger = structlog.get_logger()
 
@@ -51,7 +51,7 @@ async def get_daily_briefing(user_id: UUID) -> dict:
     except Exception as e:
         briefing_data["reminders"] = {"count": 0, "reminders": [], "error": str(e)}
 
-    # Unread emails
+    # Unread emails + proactive triage (last 24h grouped by importance)
     try:
         email_result = await gmail_service.get_unread_count(user_id)
         if email_result["success"]:
@@ -61,18 +61,28 @@ async def get_daily_briefing(user_id: UUID) -> dict:
     except Exception as e:
         briefing_data["email"] = {"unread_count": 0, "error": str(e)}
 
-    # Ze Ri (择日) — Chinese almanac
+    try:
+        triage_result = await email_triage.triage_daily(user_id)
+        briefing_data["email_triage"] = {
+            "data": triage_result,
+            "formatted": email_triage.format_triage_for_briefing(triage_result),
+        }
+    except Exception as e:
+        briefing_data["email_triage"] = {"formatted": "", "error": str(e)}
+
+    # Ze Ri (择日) — Chinese almanac + proactive alert on standout days
     try:
         almanac = get_daily_almanac(today)
         if almanac["success"]:
             briefing_data["zeri"] = {
                 "data": almanac,
                 "formatted": format_almanac_for_briefing(almanac),
+                "proactive_alert": get_proactive_alert(almanac),
             }
         else:
-            briefing_data["zeri"] = {"formatted": "", "error": almanac.get("error", "")}
+            briefing_data["zeri"] = {"formatted": "", "proactive_alert": "", "error": almanac.get("error", "")}
     except Exception as e:
-        briefing_data["zeri"] = {"formatted": "", "error": str(e)}
+        briefing_data["zeri"] = {"formatted": "", "proactive_alert": "", "error": str(e)}
 
     # Ziwei Doushu daily reading
     try:

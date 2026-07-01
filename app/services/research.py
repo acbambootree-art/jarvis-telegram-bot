@@ -8,11 +8,12 @@ logger = structlog.get_logger()
 
 
 async def web_search(query: str) -> dict:
-    """Search the web using DuckDuckGo and summarize results."""
+    """Search the web using the best available backend (Exa > Brave > DuckDuckGo)."""
+    from app.services.search_backend import search as backend_search, active_backend
     try:
-        results = await _duckduckgo_search(query)
+        results = await backend_search(query, max_results=6)
         if not results:
-            return {"success": False, "error": "No search results found"}
+            return {"success": False, "error": "No search results found", "backend": active_backend()}
 
         # Use Claude to summarize the results
         client = anthropic.Anthropic(api_key=settings.anthropic_api_key)

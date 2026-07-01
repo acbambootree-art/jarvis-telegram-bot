@@ -25,6 +25,7 @@ from app.scheduler.jobs import (
 )
 from app.services.reminders import check_and_send_reminders
 from app.services.telegram import telegram_service
+from app.services.whatsapp import whatsapp_service
 
 logger = structlog.get_logger()
 router = APIRouter()
@@ -157,6 +158,42 @@ async def handle_webhook(request: Request):
     asyncio.create_task(_handle_message(message))
 
     return {"ok": True}
+
+
+@router.post("/webhook/whatsapp")
+async def handle_whatsapp_webhook(request: Request):
+    """Handle incoming Twilio WhatsApp webhook (application/x-www-form-urlencoded)."""
+    if not whatsapp_service.enabled():
+        return Response(status_code=503, content="WhatsApp not configured")
+    form = await request.form()
+    message = whatsapp_service.parse_twilio_webhook(dict(form))
+    if not message:
+        return Response(status_code=200, content="")
+    logger.info("Received WhatsApp message", sender=message["from"])
+    asyncio.create_task(_handle_message_whatsapp(message))
+    # Twilio expects a TwiML response (empty is fine — we'll send via API)
+    return Response(status_code=200, media_type="application/xml", content="<Response></Response>")
+
+
+async def _handle_message_whatsapp(message: dict):
+    chat_id = message["chat_id"]  # already "whatsapp:+xxx"
+    try:
+        response_text = await process_message(message)
+        await whatsapp_service.send_message(chat_id, response_text)
+    except Exception as e:
+        logger.exception("Error processing WhatsApp message", error=str(e))
+        RECENT_ERRORS.append({
+            "ts": datetime.now(timezone.utc).isoformat(),
+            "chat_id": chat_id,
+            "message_text": (message.get("text") or "")[:200],
+            "error": str(e),
+            "type": type(e).__name__,
+            "traceback": traceback.format_exc()[-1500:],
+            "channel": "whatsapp",
+        })
+        if len(RECENT_ERRORS) > _MAX_ERRORS:
+            del RECENT_ERRORS[: len(RECENT_ERRORS) - _MAX_ERRORS]
+        await whatsapp_service.send_message(chat_id, "Sorry, I hit an error. Please try again.")
 
 
 async def _handle_message(message: dict):
