@@ -10,7 +10,7 @@ logger = structlog.get_logger()
 
 client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
 
-MODEL = "claude-sonnet-4-20250514"
+MODEL = "claude-sonnet-5"
 
 TOOL_DEFINITIONS = [
     # --- Calendar ---

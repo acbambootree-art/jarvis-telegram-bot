@@ -18,7 +18,7 @@ from app.config import settings
 logger = structlog.get_logger()
 
 _claude = anthropic.Anthropic(api_key=settings.anthropic_api_key) if settings.anthropic_api_key else None
-_CLAUDE_MODEL = "claude-sonnet-4-20250514"
+_CLAUDE_MODEL = "claude-sonnet-5"
 
 # ---------------------------------------------------------------------------
 # Translation tables

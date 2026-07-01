@@ -18,7 +18,7 @@ from app.services.research import _duckduckgo_search
 logger = structlog.get_logger()
 
 _claude = anthropic.Anthropic(api_key=settings.anthropic_api_key) if settings.anthropic_api_key else None
-_MODEL = "claude-sonnet-4-20250514"
+_MODEL = "claude-sonnet-5"
 
 
 # ---------------------------------------------------------------------------

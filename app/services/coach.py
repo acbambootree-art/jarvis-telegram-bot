@@ -21,7 +21,7 @@ from app.services import calendar_service, health, tasks
 logger = structlog.get_logger()
 
 _claude = anthropic.Anthropic(api_key=settings.anthropic_api_key) if settings.anthropic_api_key else None
-_MODEL = "claude-sonnet-4-20250514"
+_MODEL = "claude-sonnet-5"
 
 # Weekday → theme + signature Robbins framework to anchor each day
 _WEEKDAY_THEMES = {

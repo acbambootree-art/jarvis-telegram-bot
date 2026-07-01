@@ -288,7 +288,7 @@ async def get_daily_reading() -> dict:
         )
 
         response = _client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model="claude-sonnet-5",
             max_tokens=200,
             system=_BRIEFING_SYSTEM,
             messages=[{"role": "user", "content": user_prompt}],
@@ -370,7 +370,7 @@ async def get_ziwei_fortune(
             max_tokens = 300
 
         response = _client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model="claude-sonnet-5",
             max_tokens=max_tokens,
             system=_FORTUNE_SYSTEM,
             messages=[{"role": "user", "content": user_prompt}],
