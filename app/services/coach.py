@@ -17,6 +17,7 @@ import structlog
 
 from app.config import settings
 from app.services import calendar_service, health, tasks
+from app.core.claude_helpers import extract_text
 
 logger = structlog.get_logger()
 
@@ -188,7 +189,7 @@ async def get_daily_motivation(user_id: UUID) -> dict:
             system=_MOTIVATION_SYSTEM,
             messages=[{"role": "user", "content": user_prompt}],
         )
-        text = msg.content[0].text.strip() if msg.content else ""
+        text = extract_text(msg) or ""
         return {"success": True, "message": text, "theme": theme_name}
     except Exception as e:
         logger.error("coach_motivation_failed", error=str(e))
@@ -216,7 +217,7 @@ async def get_evening_checkin(user_id: UUID) -> dict:
             system=_CHECKIN_SYSTEM,
             messages=[{"role": "user", "content": user_prompt}],
         )
-        text = msg.content[0].text.strip() if msg.content else ""
+        text = extract_text(msg) or ""
         return {"success": True, "message": text}
     except Exception as e:
         logger.error("coach_checkin_failed", error=str(e))

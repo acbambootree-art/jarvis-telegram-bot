@@ -14,6 +14,7 @@ from sqlalchemy import select
 from app.config import settings
 from app.db.database import async_session
 from app.models.models import CheckinResponse
+from app.core.claude_helpers import extract_text
 
 logger = structlog.get_logger()
 
@@ -43,7 +44,7 @@ async def extract_and_store(user_id: UUID, raw_reply: str) -> dict:
             system=_EXTRACT_SYSTEM,
             messages=[{"role": "user", "content": raw_reply}],
         )
-        text = msg.content[0].text.strip() if msg.content else ""
+        text = extract_text(msg) or ""
         import json, re
         m = re.search(r"\{.*\}", text, re.DOTALL)
         if m:

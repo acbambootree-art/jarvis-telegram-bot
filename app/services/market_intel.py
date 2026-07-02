@@ -223,7 +223,7 @@ async def get_daily_market_intel() -> dict:
             system=_SYSTEM_PROMPT,
             messages=[{"role": "user", "content": user_prompt}],
         )
-        text = msg.content[0].text.strip() if msg.content else ""
+        text = extract_text(msg) or ""
         # Post-process: strip any sneaky "linked above" phantom phrases
         text = _strip_phantom_links(text)
         return {
@@ -243,6 +243,7 @@ async def get_daily_market_intel() -> dict:
 # ---------------------------------------------------------------------------
 
 import re as _re
+from app.core.claude_helpers import extract_text
 
 _PHANTOM_LINK_PATTERNS = [
     _re.compile(r"\s*\(linked above\)", _re.IGNORECASE),

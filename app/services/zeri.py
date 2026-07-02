@@ -14,6 +14,7 @@ import cnlunar
 import structlog
 
 from app.config import settings
+from app.core.claude_helpers import extract_text
 
 logger = structlog.get_logger()
 
@@ -347,7 +348,7 @@ def _claude_personal_reading(day_gz: str, analysis: dict, generic_good: list, ge
             system=_PERSONAL_SYSTEM,
             messages=[{"role": "user", "content": prompt}],
         )
-        return msg.content[0].text.strip() if msg.content else ""
+        return extract_text(msg) or ""
     except Exception as e:
         logger.error("zeri_claude_error", error=str(e))
         return ""

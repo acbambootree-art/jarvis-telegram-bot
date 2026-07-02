@@ -3,6 +3,7 @@ import httpx
 import structlog
 
 from app.config import settings
+from app.core.claude_helpers import extract_text
 
 logger = structlog.get_logger()
 
@@ -34,7 +35,7 @@ async def web_search(query: str) -> dict:
             ],
         )
 
-        summary = summary_response.content[0].text
+        summary = extract_text(summary_response)
 
         return {
             "success": True,

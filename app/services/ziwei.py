@@ -13,6 +13,7 @@ import structlog
 from izthon.astro import by_solar
 
 from app.config import settings
+from app.core.claude_helpers import extract_text
 
 logger = structlog.get_logger()
 
@@ -293,7 +294,7 @@ async def get_daily_reading() -> dict:
             system=_BRIEFING_SYSTEM,
             messages=[{"role": "user", "content": user_prompt}],
         )
-        reading = response.content[0].text.strip()
+        reading = extract_text(response)
 
         return {
             "success": True,
@@ -375,7 +376,7 @@ async def get_ziwei_fortune(
             system=_FORTUNE_SYSTEM,
             messages=[{"role": "user", "content": user_prompt}],
         )
-        reading = response.content[0].text.strip()
+        reading = extract_text(response)
 
         result = {
             "success": True,

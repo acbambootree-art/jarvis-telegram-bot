@@ -14,6 +14,7 @@ from app.config import settings
 from app.db.database import async_session
 from app.models.models import FeedbackRating
 from app.services import facts
+from app.core.claude_helpers import extract_text
 
 logger = structlog.get_logger()
 
@@ -99,7 +100,7 @@ async def distil_weekly_prefs(user_id: UUID) -> dict:
             system="Return only 'PREF: ...' lines or 'NONE'. No preamble.",
             messages=[{"role": "user", "content": prompt}],
         )
-        text = msg.content[0].text.strip() if msg.content else "NONE"
+        text = extract_text(msg) or "NONE"
         if text.upper().startswith("NONE"):
             return {"success": True, "note": "no clear pattern", "count": len(rows)}
         # Save each PREF line as a preference fact

@@ -15,6 +15,7 @@ import anthropic
 import structlog
 
 from app.config import settings
+from app.core.claude_helpers import extract_text
 
 logger = structlog.get_logger()
 
@@ -62,7 +63,7 @@ async def analyse_image(image_bytes: bytes, mime_type: str = "image/jpeg", capti
             system=_VISION_SYSTEM,
             messages=[{"role": "user", "content": user_content}],
         )
-        text = msg.content[0].text.strip() if msg.content else ""
+        text = extract_text(msg) or ""
         import json, re
         m = re.search(r"\{.*\}", text, re.DOTALL)
         if not m:

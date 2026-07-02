@@ -13,6 +13,7 @@ import structlog
 
 from app.config import settings
 from app.services import gmail_service
+from app.core.claude_helpers import extract_text
 
 logger = structlog.get_logger()
 
@@ -98,7 +99,7 @@ async def triage_daily(user_id: UUID) -> dict:
             system=_TRIAGE_SYSTEM,
             messages=[{"role": "user", "content": prompt}],
         )
-        text = msg.content[0].text.strip() if msg.content else ""
+        text = extract_text(msg) or ""
         # Extract JSON
         import json, re
         json_match = re.search(r"\{.*\}", text, re.DOTALL)
