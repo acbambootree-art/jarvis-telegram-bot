@@ -49,6 +49,12 @@ async def process_message(message: dict) -> str:
             return f"Could not transcribe voice message: {voice_result['error']}"
     elif message["type"] == "text":
         user_text = message["text"]
+        # If the user was quoting a specific prior Jarvis message via
+        # Telegram's reply feature, include that quote so Claude can
+        # disambiguate short answers like "sure" / "yes" / "no".
+        reply_to = message.get("reply_to_text")
+        if reply_to:
+            user_text = f"[Replying to your message: \"{reply_to[:400]}\"]\n\n{user_text}"
     elif message["type"] == "image":
         # Vision pipeline: download the image, run Claude vision, act on it,
         # and return the short reply directly. Also record a text summary

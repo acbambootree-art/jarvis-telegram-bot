@@ -108,6 +108,13 @@ class TelegramService:
             "type": "text",
         }
 
+        # Capture what the user is replying to (Telegram quote feature)
+        reply_to = msg.get("reply_to_message")
+        if reply_to:
+            quoted = reply_to.get("text") or reply_to.get("caption") or ""
+            if quoted:
+                result["reply_to_text"] = quoted[:1000]
+
         if "text" in msg:
             result["text"] = msg["text"]
         elif "voice" in msg:

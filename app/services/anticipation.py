@@ -35,6 +35,16 @@ def _should_send(key: str) -> bool:
     return True
 
 
+async def _persist_nudge(user_id: UUID, msg: str):
+    """Save the nudge to conversation history so Claude sees it as its
+    own prior message when the user replies to it."""
+    try:
+        from app.core.memory import save_message
+        await save_message(user_id, "assistant", msg)
+    except Exception as e:
+        logger.warning("nudge_persist_failed", error=str(e))
+
+
 async def run_sweep(user_id: UUID) -> list[str]:
     """Run all anticipation checks. Send nudges. Return the list of
     messages actually sent (for logging/diag)."""
@@ -66,6 +76,7 @@ async def run_sweep(user_id: UUID) -> list[str]:
                             f"Want a prep summary of your last thread with them?"
                         )
                         await telegram.telegram_service.send_message(settings.owner_chat_id, msg)
+                        await _persist_nudge(user_id, msg)
                         sent.append(msg)
     except Exception as e:
         logger.warning("anticipation_calendar_check_failed", error=str(e))
