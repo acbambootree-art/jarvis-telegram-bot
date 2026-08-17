@@ -90,6 +90,72 @@ async def update_task(user_id: UUID, task_id: str, **kwargs) -> dict:
     }
 
 
+_OPEN_STATUSES = ("todo", "in_progress")
+
+
+def _normalise_ref(ref: str) -> str:
+    """'A.)' -> 'A', 'task b' -> 'B', 'call the bank' -> 'call the bank'."""
+    stripped = ref.strip().strip(".):(").removeprefix("task ").removeprefix("Task ").strip()
+    return stripped.upper() if len(stripped) == 1 else stripped.lower()
+
+
+def resolve_refs(open_tasks: list, refs: list[str]) -> tuple[list, list[dict]]:
+    """Map refs onto tasks. Returns (matched tasks, unresolved refs).
+
+    Pure so it can be tested without a database — see tests/test_close_tasks.py.
+    """
+    matched, unresolved, seen = [], [], set()
+    for ref in refs:
+        key = _normalise_ref(ref)
+        task = None
+        if len(key) == 1 and key.isalpha():
+            idx = ord(key) - ord("A")
+            if 0 <= idx < len(open_tasks):
+                task = open_tasks[idx]
+        else:
+            hits = [t for t in open_tasks if key in t.title.lower()]
+            if len(hits) == 1:
+                task = hits[0]
+            elif len(hits) > 1:
+                unresolved.append({"ref": ref, "reason": "matches several open tasks",
+                                   "candidates": [t.title for t in hits]})
+                continue
+        if task is None:
+            unresolved.append({"ref": ref, "reason": "no open task matches"})
+        elif task.id not in seen:
+            seen.add(task.id)
+            matched.append(task)
+    return matched, unresolved
+
+
+async def close_tasks(user_id: UUID, refs: list[str], status: str = "done") -> dict:
+    """Resolve task references and set their status in one call.
+
+    A ref is either a position letter (A = first open task, B = second, ...)
+    matching the lettered list shown to the user, or a title substring.
+    Resolution happens here rather than in the prompt so the model never has
+    to count list positions itself.
+    """
+    async with async_session() as session:
+        repo = TaskRepository(session)
+        all_tasks = await repo.list_tasks(user_id)
+        open_tasks = [t for t in all_tasks if t.status in _OPEN_STATUSES]
+
+        matched, unresolved = resolve_refs(open_tasks, refs)
+
+        updated = []
+        for task in matched:
+            await repo.update(task.id, user_id, status=status)
+            updated.append({"task_id": str(task.id), "title": task.title, "status": status})
+
+    return {
+        "success": bool(updated),
+        "updated": updated,
+        "unresolved": unresolved,
+        "open_count": len(open_tasks) - len(updated),
+    }
+
+
 async def delete_task(user_id: UUID, task_id: str) -> dict:
     async with async_session() as session:
         repo = TaskRepository(session)

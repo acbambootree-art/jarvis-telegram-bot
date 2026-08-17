@@ -6,7 +6,12 @@ import structlog
 
 from app.core.claude_client import TOOL_DEFINITIONS, create_message
 from app.core.date_corrector import correct_weekdays
-from app.core.memory import load_conversation_history, save_message
+from app.core.memory import (
+    load_conversation_history,
+    load_conversation_summary,
+    save_message,
+    update_summary_if_needed,
+)
 from app.db.database import async_session
 from app.db.repositories import UserRepository
 from app.services import (
@@ -120,6 +125,10 @@ async def process_message(message: dict) -> str:
     # Save assistant response
     await save_message(user_id, "assistant", response_text)
 
+    # Fold anything that just fell out of the live window into the running
+    # summary. Backgrounded — the user's reply must not wait on it.
+    asyncio.create_task(update_summary_if_needed(user_id))
+
     return response_text
 
 
@@ -155,8 +164,15 @@ async def _run_claude_loop(user_id: UUID, messages: list[dict], timezone: str) -
     # Load persistent facts once per turn — injected into the system
     # prompt so Jarvis remembers long-term context.
     facts_digest = await facts.load_facts_for_prompt(user_id)
+    # Running memory of conversation older than the live window.
+    conversation_summary = await load_conversation_summary(user_id)
     for iteration in range(MAX_TOOL_ITERATIONS):
-        response = create_message(messages, user_timezone=timezone, facts_digest=facts_digest)
+        response = create_message(
+            messages,
+            user_timezone=timezone,
+            facts_digest=facts_digest,
+            conversation_summary=conversation_summary,
+        )
 
         # Check if Claude wants to use tools
         if response.stop_reason == "tool_use":
@@ -257,6 +273,8 @@ async def _execute_tool(user_id: UUID, tool_name: str, tool_input: dict) -> dict
             return await tasks.create_task(user_id, **tool_input)
         elif tool_name == "update_task":
             return await tasks.update_task(user_id, **tool_input)
+        elif tool_name == "close_tasks":
+            return await tasks.close_tasks(user_id, **tool_input)
         elif tool_name == "delete_task":
             return await tasks.delete_task(user_id, **tool_input)
 

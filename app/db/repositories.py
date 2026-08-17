@@ -56,13 +56,71 @@ class ConversationRepository:
     async def get_recent(self, user_id: UUID, limit: int = 20) -> list[ConversationHistory]:
         result = await self.session.execute(
             select(ConversationHistory)
-            .where(ConversationHistory.user_id == user_id)
+            .where(
+                and_(
+                    ConversationHistory.user_id == user_id,
+                    ConversationHistory.role.in_(("user", "assistant")),
+                )
+            )
             .order_by(ConversationHistory.created_at.desc())
             .limit(limit)
         )
         messages = list(result.scalars().all())
         messages.reverse()
         return messages
+
+    # --- rolling summary -------------------------------------------------
+    # Stored as a single row with the reserved role "summary" so it needs no
+    # new table. get_recent() filters it out; only these helpers see it.
+
+    async def get_summary(self, user_id: UUID) -> Optional[ConversationHistory]:
+        result = await self.session.execute(
+            select(ConversationHistory).where(
+                and_(ConversationHistory.user_id == user_id, ConversationHistory.role == "summary")
+            )
+        )
+        return result.scalars().first()
+
+    async def save_summary(self, user_id: UUID, content: str, covered_until):
+        await self.session.execute(
+            delete(ConversationHistory).where(
+                and_(ConversationHistory.user_id == user_id, ConversationHistory.role == "summary")
+            )
+        )
+        self.session.add(
+            ConversationHistory(
+                user_id=user_id, role="summary", content=content,
+                metadata_={"covered_until": covered_until.isoformat()},
+            )
+        )
+        await self.session.commit()
+
+    async def get_older_than(self, user_id: UUID, keep_recent: int) -> list[ConversationHistory]:
+        """Real messages that have fallen out of the live window, oldest first."""
+        recent_ids = (
+            select(ConversationHistory.id)
+            .where(
+                and_(
+                    ConversationHistory.user_id == user_id,
+                    ConversationHistory.role.in_(("user", "assistant")),
+                )
+            )
+            .order_by(ConversationHistory.created_at.desc())
+            .limit(keep_recent)
+            .subquery()
+        )
+        result = await self.session.execute(
+            select(ConversationHistory)
+            .where(
+                and_(
+                    ConversationHistory.user_id == user_id,
+                    ConversationHistory.role.in_(("user", "assistant")),
+                    ConversationHistory.id.notin_(select(recent_ids.c.id)),
+                )
+            )
+            .order_by(ConversationHistory.created_at.asc())
+        )
+        return list(result.scalars().all())
 
     async def delete_oldest(self, user_id: UUID, keep: int = 50):
         subq = (
@@ -74,7 +132,11 @@ class ConversationRepository:
         )
         await self.session.execute(
             delete(ConversationHistory).where(
-                and_(ConversationHistory.user_id == user_id, ConversationHistory.id.notin_(select(subq.c.id)))
+                and_(
+                    ConversationHistory.user_id == user_id,
+                    ConversationHistory.id.notin_(select(subq.c.id)),
+                    ConversationHistory.role != "summary",  # never prune the running memory
+                )
             )
         )
         await self.session.commit()
