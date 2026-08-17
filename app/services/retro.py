@@ -118,7 +118,7 @@ async def generate_weekly_retro(user_id: UUID) -> dict:
         msg = _claude.messages.create(
             model=_MODEL,
             max_tokens=6000,
-            thinking={"type": "enabled", "budget_tokens": 4000},
+            thinking={"type": "adaptive"},
             system=_SYSTEM,
             messages=[{"role": "user", "content": prompt}],
         )

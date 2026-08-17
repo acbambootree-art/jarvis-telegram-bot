@@ -145,7 +145,7 @@ async def synthesize_state(user_id: UUID, question: str | None = None) -> dict:
         msg = _claude.messages.create(
             model=_MODEL,
             max_tokens=8000,
-            thinking={"type": "enabled", "budget_tokens": 5000},
+            thinking={"type": "adaptive"},
             system=_SYSTEM,
             messages=[{"role": "user", "content": user_prompt}],
         )

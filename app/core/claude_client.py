@@ -614,14 +614,17 @@ def create_message(
         }
     ]
 
-    # Extended thinking: enable when the query is hard (planning /
-    # synthesis / tradeoffs / math). Cheap queries skip it.
+    # Adaptive thinking (always on for Sonnet 5); effort controls depth.
+    # Hard queries (planning / synthesis / tradeoffs / math) get more.
     kwargs = {}
     if force_thinking or _needs_deep_thinking(messages):
-        kwargs["thinking"] = {"type": "enabled", "budget_tokens": 5000}
+        kwargs["thinking"] = {"type": "adaptive"}
+        kwargs["output_config"] = {"effort": "high"}
         kwargs["max_tokens"] = 8192
     else:
-        kwargs["max_tokens"] = 2048
+        kwargs["thinking"] = {"type": "adaptive"}
+        kwargs["output_config"] = {"effort": "low"}
+        kwargs["max_tokens"] = 4096
 
     return client.messages.create(
         model=MODEL,
