@@ -65,6 +65,28 @@ def demo():
     assert resolve_refs(OPEN, []) == ([], [])
     assert resolve_refs([], ["A"])[0] == []
 
+    # --- regressions ---------------------------------------------------
+
+    # A model that sends refs="bank" rather than ["bank"] must not have the
+    # string iterated per character (b, a, n, k), which silently closed two
+    # unrelated tasks sitting at positions B and A.
+    m, u = resolve_refs(OPEN, "bank")
+    assert titles(m) == ["Call the bank"], titles(m)
+    assert not u, u
+    m, _ = resolve_refs(OPEN, "A")
+    assert titles(m) == ["Call the bank"]
+
+    # Non-string refs must not blow up on .strip()
+    m, u = resolve_refs(OPEN, [1])
+    assert m == [] and len(u) == 1
+
+    # Letters index the OPEN list — todo and in_progress together. list_tasks
+    # must show that same set, or every letter after an in_progress task
+    # points one row short of what the user actually saw.
+    mixed = [T(1, "Call the bank"), T(2, "File taxes"), T(3, "Book flights")]
+    m, _ = resolve_refs(mixed, ["B"])
+    assert titles(m) == ["File taxes"], titles(m)
+
     print("close_tasks resolution: all checks passed")
 
 

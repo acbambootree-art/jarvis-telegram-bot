@@ -1,4 +1,5 @@
 import asyncio
+from datetime import datetime
 from uuid import UUID
 
 import structlog
@@ -40,6 +41,9 @@ async def cleanup_old_messages(user_id: UUID, keep: int = 50):
 
 WINDOW = 20
 SUMMARISE_AFTER = 10
+# Kept well above the largest limit any caller asks for — market_intel reads
+# back 80 messages — so pruning never starves an existing reader.
+KEEP_MESSAGES = 200
 _SUMMARY_MODEL = "claude-haiku-4-5"
 
 _SUMMARY_PROMPT = """You keep the running memory of an assistant's conversation with its user.
@@ -65,19 +69,39 @@ async def load_conversation_summary(user_id: UUID) -> str:
     return row.content if row else ""
 
 
+_summarising: set[UUID] = set()
+
+
 async def update_summary_if_needed(user_id: UUID) -> bool:
     """Fold messages that fell out of the live window into the summary.
 
     Safe to fire and forget — any failure leaves the existing summary and
     messages untouched, and the next turn retries.
     """
+    # Two messages in quick succession would otherwise start two of these,
+    # each folding in the same backlog and racing to overwrite the summary.
+    if user_id in _summarising:
+        return False
+    _summarising.add(user_id)
     try:
         async with async_session() as session:
             repo = ConversationRepository(session)
-            stale = await repo.get_older_than(user_id, keep_recent=WINDOW)
+            previous = await repo.get_summary(user_id)
+            # Only look at messages the existing summary does not already
+            # cover — otherwise every turn past WINDOW re-folds the whole
+            # backlog, burning a model call each time and degrading the
+            # summary by repeatedly rewriting it from its own output.
+            covered_until = None
+            if previous:
+                raw = (previous.metadata_ or {}).get("covered_until")
+                if raw:
+                    try:
+                        covered_until = datetime.fromisoformat(raw)
+                    except ValueError:
+                        logger.warning("summary_covered_until_unparseable", value=raw)
+            stale = await repo.get_older_than(user_id, keep_recent=WINDOW, after=covered_until)
             if len(stale) < SUMMARISE_AFTER:
                 return False
-            previous = await repo.get_summary(user_id)
 
         transcript = "\n".join(f"{m.role}: {m.content}" for m in stale)
         existing = previous.content if previous else "(nothing recorded yet)"
@@ -103,10 +127,13 @@ async def update_summary_if_needed(user_id: UUID) -> bool:
         async with async_session() as session:
             repo = ConversationRepository(session)
             await repo.save_summary(user_id, summary, covered_until=stale[-1].created_at)
-        # Summarised messages are now redundant; keep the live window plus headroom.
-        await cleanup_old_messages(user_id, keep=WINDOW * 2)
+        # Summarised messages are redundant now, but other readers still page
+        # back through raw history, so trim only the far tail.
+        await cleanup_old_messages(user_id, keep=KEEP_MESSAGES)
         logger.info("conversation_summarised", folded=len(stale), chars=len(summary))
         return True
     except Exception as e:
         logger.warning("summary_update_failed", error=str(e))
         return False
+    finally:
+        _summarising.discard(user_id)

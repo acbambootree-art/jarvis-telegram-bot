@@ -10,6 +10,8 @@ from app.db.repositories import TaskRepository
 
 logger = structlog.get_logger()
 
+_OPEN_STATUSES = ("todo", "in_progress")
+
 
 async def create_task(
     user_id: UUID,
@@ -49,6 +51,13 @@ async def list_tasks(
     async with async_session() as session:
         repo = TaskRepository(session)
         tasks = await repo.list_tasks(user_id, status=status, priority=priority)
+
+    if status is None:
+        # Default to the open list. This has to be the *same* set, in the same
+        # order, that close_tasks resolves letters against — if one of them
+        # counted in_progress tasks and the other did not, every letter after
+        # the first in_progress task would point at the wrong thing.
+        tasks = [t for t in tasks if t.status in _OPEN_STATUSES]
 
     return {
         "success": True,
@@ -90,12 +99,9 @@ async def update_task(user_id: UUID, task_id: str, **kwargs) -> dict:
     }
 
 
-_OPEN_STATUSES = ("todo", "in_progress")
-
-
-def _normalise_ref(ref: str) -> str:
+def _normalise_ref(ref) -> str:
     """'A.)' -> 'A', 'task b' -> 'B', 'call the bank' -> 'call the bank'."""
-    stripped = ref.strip().strip(".):(").removeprefix("task ").removeprefix("Task ").strip()
+    stripped = str(ref).strip().strip(".):(").removeprefix("task ").removeprefix("Task ").strip()
     return stripped.upper() if len(stripped) == 1 else stripped.lower()
 
 
@@ -104,6 +110,12 @@ def resolve_refs(open_tasks: list, refs: list[str]) -> tuple[list, list[dict]]:
 
     Pure so it can be tested without a database — see tests/test_close_tasks.py.
     """
+    # A model that sends refs="A" instead of ["A"] would otherwise have the
+    # string iterated character by character — "bank" becoming refs B,A,N,K
+    # and silently closing whatever happens to sit at those positions.
+    if isinstance(refs, str):
+        refs = [refs]
+
     matched, unresolved, seen = [], [], set()
     for ref in refs:
         key = _normalise_ref(ref)
@@ -148,11 +160,13 @@ async def close_tasks(user_id: UUID, refs: list[str], status: str = "done") -> d
             await repo.update(task.id, user_id, status=status)
             updated.append({"task_id": str(task.id), "title": task.title, "status": status})
 
+    # Moving a task to in_progress leaves it open; done/cancelled do not.
+    closed = 0 if status in _OPEN_STATUSES else len(updated)
     return {
         "success": bool(updated),
         "updated": updated,
         "unresolved": unresolved,
-        "open_count": len(open_tasks) - len(updated),
+        "open_count": len(open_tasks) - closed,
     }
 
 

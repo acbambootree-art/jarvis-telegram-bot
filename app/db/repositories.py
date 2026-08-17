@@ -95,8 +95,15 @@ class ConversationRepository:
         )
         await self.session.commit()
 
-    async def get_older_than(self, user_id: UUID, keep_recent: int) -> list[ConversationHistory]:
-        """Real messages that have fallen out of the live window, oldest first."""
+    async def get_older_than(
+        self, user_id: UUID, keep_recent: int, after: Optional[datetime] = None
+    ) -> list[ConversationHistory]:
+        """Messages that have fallen out of the live window, oldest first.
+
+        `after` skips anything the existing summary already covers, so the
+        summariser folds in each message once instead of re-reading the whole
+        backlog on every turn.
+        """
         recent_ids = (
             select(ConversationHistory.id)
             .where(
@@ -109,15 +116,16 @@ class ConversationRepository:
             .limit(keep_recent)
             .subquery()
         )
+        conditions = [
+            ConversationHistory.user_id == user_id,
+            ConversationHistory.role.in_(("user", "assistant")),
+            ConversationHistory.id.notin_(select(recent_ids.c.id)),
+        ]
+        if after is not None:
+            conditions.append(ConversationHistory.created_at > after)
         result = await self.session.execute(
             select(ConversationHistory)
-            .where(
-                and_(
-                    ConversationHistory.user_id == user_id,
-                    ConversationHistory.role.in_(("user", "assistant")),
-                    ConversationHistory.id.notin_(select(recent_ids.c.id)),
-                )
-            )
+            .where(and_(*conditions))
             .order_by(ConversationHistory.created_at.asc())
         )
         return list(result.scalars().all())

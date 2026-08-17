@@ -112,7 +112,13 @@ TOOL_DEFINITIONS = [
     # --- Tasks ---
     {
         "name": "list_tasks",
-        "description": "List user's tasks. Can filter by status (todo, in_progress, done, cancelled) and priority (low, medium, high, urgent).",
+        "description": (
+            "List the user's tasks. With no status filter it returns the open ones "
+            "(todo and in_progress) — that is the list to show them, and the order "
+            "the letters in close_tasks refer to, so prefer it. Pass a status only "
+            "when they specifically ask about done or cancelled work; a filtered list "
+            "is lettered differently and closing by letter off it will hit the wrong task."
+        ),
         "input_schema": {
             "type": "object",
             "properties": {
@@ -506,32 +512,43 @@ TOOL_DEFINITIONS = [
 ]
 
 
-def build_system_prompt(
+def build_context_block(
     user_timezone: str = "Asia/Singapore",
     facts_digest: str = "",
     conversation_summary: str = "",
 ) -> str:
+    """The volatile half of the system prompt: clock, facts, running memory.
+
+    Kept separate from — and rendered *after* — the static half so the clock
+    ticking does not invalidate the cached prefix every minute.
+    """
     tz = ZoneInfo(user_timezone)
     now = datetime.now(tz)
     tomorrow = now + timedelta(days=1)
-    facts_block = (
-        "\nWhat you already know about them (persistent memory — treat as authoritative):\n"
-        + facts_digest
-        + "\n"
-    ) if facts_digest else ""
+    block = (
+        f"Right now it is {now.strftime('%A, %d %B %Y, %H:%M')} ({user_timezone}).\n"
+        f"Today is {now.strftime('%A %d %b %Y')}; tomorrow is {tomorrow.strftime('%A %d %b %Y')}."
+    )
+    if facts_digest:
+        block += (
+            "\n\nWhat you already know about them (persistent memory — treat as authoritative):\n"
+            + facts_digest
+        )
     if conversation_summary:
-        facts_block += (
-            "\nWhere things stand from earlier conversations (older than the messages below —"
+        block += (
+            "\n\nWhere things stand from earlier conversations (older than the messages below —"
             " you already know all this, so do not ask again):\n"
             + conversation_summary
-            + "\n"
         )
-    return f"""You are Jarvis, a personal assistant for one person, reachable over Telegram.
+    return block
+
+
+def build_static_prompt() -> str:
+    """The stable half: identity and working rules. Byte-identical every
+    request, so it sits in front of the cache breakpoint along with the tools."""
+    return """You are Jarvis, a personal assistant for one person, reachable over Telegram.
 You manage their calendar, mail, tasks, reminders, notes, expenses and research.
 
-Right now it is {now.strftime('%A, %d %B %Y, %H:%M')} ({user_timezone}).
-Today is {now.strftime('%A %d %b %Y')}; tomorrow is {tomorrow.strftime('%A %d %b %Y')}.
-{facts_block}
 HOW YOU WRITE
 You are writing in a chat window on a phone, so keep it short — a sentence or two for
 simple things, and only as long as the question actually needs. Skip preambles and
@@ -581,6 +598,20 @@ lighter — answer what they asked and keep the frame.
 """
 
 
+def build_system_prompt(
+    user_timezone: str = "Asia/Singapore",
+    facts_digest: str = "",
+    conversation_summary: str = "",
+) -> str:
+    """Both halves joined, in the order the model sees them. Handy for tests
+    and evals; production sends them as two blocks so the first one caches."""
+    return (
+        build_static_prompt()
+        + "\n\n"
+        + build_context_block(user_timezone, facts_digest, conversation_summary)
+    )
+
+
 _HARD_QUERY_HINTS = (
     "should i", "help me decide", "plan my", "trade-off", "tradeoff", "pros and cons",
     "priorit", "why", "what should", "compare", "reason", "figure out",
@@ -614,20 +645,26 @@ def create_message(
     conversation_summary: str = "",
     force_thinking: bool = False,
 ) -> anthropic.types.Message:
-    # Structured system block with prompt caching. The system prompt +
-    # tool schemas together are ~5-8k tokens; caching them (5 min TTL)
-    # cuts input cost by ~90% for the common case where the user sends
-    # a follow-up within the cache window.
+    # Two blocks, and the order matters. Everything before the cache_control
+    # breakpoint has to be byte-identical between requests or nothing caches,
+    # so the clock, the facts digest and the running summary all go *after*
+    # it. With the clock inside the cached block the prefix changed every
+    # minute and the ~8k tokens of tools + prompt were re-written on nearly
+    # every message instead of being read back at a tenth of the price.
     system_block = [
         {
             "type": "text",
-            "text": build_system_prompt(
+            "text": build_static_prompt(),
+            "cache_control": {"type": "ephemeral"},
+        },
+        {
+            "type": "text",
+            "text": build_context_block(
                 user_timezone,
                 facts_digest=facts_digest,
                 conversation_summary=conversation_summary,
             ),
-            "cache_control": {"type": "ephemeral"},
-        }
+        },
     ]
 
     # Adaptive thinking (always on for Sonnet 5); effort controls depth.
