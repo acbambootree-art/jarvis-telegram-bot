@@ -347,6 +347,26 @@ class HealthMetricRepository:
             "total": float(row.total) if row.total else 0,
         }
 
+    async def delete_in_window(
+        self, user_id: UUID, metric_type: str, start: datetime, end: datetime, notes: str
+    ) -> int:
+        """Remove one metric's rows in [start, end) that carry the given notes
+        tag. Used by the Apple Health sync to replace a day it already wrote
+        without touching anything the user logged by hand."""
+        result = await self.session.execute(
+            delete(HealthMetric).where(
+                and_(
+                    HealthMetric.user_id == user_id,
+                    HealthMetric.metric_type == metric_type,
+                    HealthMetric.recorded_at >= start,
+                    HealthMetric.recorded_at < end,
+                    HealthMetric.notes == notes,
+                )
+            )
+        )
+        await self.session.commit()
+        return result.rowcount or 0
+
     async def list_metrics(
         self, user_id: UUID, metric_type: str = None, limit: int = 20
     ) -> list[HealthMetric]:

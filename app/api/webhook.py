@@ -14,6 +14,7 @@ from app.config import settings
 from app.core.router import RECENT_TOOL_CALLS, process_message
 from app.services.health_check import RECENT_HEARTBEATS, run_and_record_heartbeat
 from app.db.database import async_session
+from app.db.repositories import UserRepository
 from app.models.models import Reminder, UserSettings
 from app.scheduler.jobs import (
     _reminder_tick_count,
@@ -23,6 +24,7 @@ from app.scheduler.jobs import (
     _run_market_intel,
     scheduler,
 )
+from app.services import health
 from app.services.reminders import check_and_send_reminders
 from app.services.telegram import telegram_service
 from app.services.whatsapp import whatsapp_service
@@ -158,6 +160,37 @@ async def handle_webhook(request: Request):
     asyncio.create_task(_handle_message(message))
 
     return {"ok": True}
+
+
+@router.post("/webhook/health")
+async def health_import(request: Request, dry_run: bool = False):
+    """Apple Health sync target — the phone posts here once a day.
+
+    Takes either the flat Shortcut shape ({"date": ..., "steps": N, ...}) or
+    Health Auto Export's JSON verbatim; see health.normalise_readings. Gated
+    by the admin secret. ?dry_run=1 parses and echoes what would be stored
+    without writing, for checking a new Shortcut before trusting it.
+    """
+    _check_admin(request)
+    if not settings.owner_chat_id:
+        raise HTTPException(status_code=503, detail="owner_chat_id not configured")
+    try:
+        payload = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="body must be JSON")
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=400, detail="body must be a JSON object")
+
+    async with async_session() as session:
+        user = await UserRepository(session).get_or_create(settings.owner_chat_id)
+
+    try:
+        result = await health.import_readings(user.id, payload, user.timezone, dry_run=dry_run)
+    except ValueError as e:  # unparseable date in the payload
+        raise HTTPException(status_code=400, detail=str(e))
+    if not result["success"]:
+        raise HTTPException(status_code=400, detail=result["error"])
+    return result
 
 
 @router.post("/webhook/whatsapp")
