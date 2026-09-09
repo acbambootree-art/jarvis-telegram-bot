@@ -22,6 +22,7 @@ from app.services import (
     gmail_service,
     health,
     notes,
+    power_laws,
     reminders,
     research,
     tasks,
@@ -355,6 +356,10 @@ async def _execute_tool(user_id: UUID, tool_name: str, tool_input: dict) -> dict
         # Ziwei Doushu (紫微斗数)
         elif tool_name == "get_ziwei_fortune":
             return await ziwei.get_ziwei_fortune(user_id, **tool_input)
+
+        # 48 Laws of Power coach
+        elif tool_name == "analyze_power_scenario":
+            return await power_laws.analyze_power_scenario(user_id, **tool_input)
 
         else:
             return {"success": False, "error": f"Unknown tool: {tool_name}"}

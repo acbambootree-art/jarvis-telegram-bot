@@ -21,6 +21,7 @@ from app.services.coach import (
     get_evening_checkin,
 )
 from app.services.market_intel import format_for_telegram as format_market_intel
+from app.services.power_laws import format_lesson_for_telegram, get_daily_law_lesson
 from app.services.market_intel import get_daily_market_intel
 from app.services.reminders import check_and_send_reminders
 from app.services.telegram import telegram_service
@@ -57,6 +58,16 @@ def start_scheduler():
         _run_market_intel,
         trigger=CronTrigger(hour=10, minute=0, timezone=tz),
         id="market_intel",
+        replace_existing=True,
+        misfire_grace_time=3600,
+        coalesce=True,
+    )
+
+    # 48 Laws of Power: one law a day at 09:00
+    scheduler.add_job(
+        _run_power_law,
+        trigger=CronTrigger(hour=9, minute=0, timezone=tz),
+        id="power_law",
         replace_existing=True,
         misfire_grace_time=3600,
         coalesce=True,
@@ -125,6 +136,7 @@ def start_scheduler():
         reminder_interval="60s",
         briefing_time=settings.briefing_time,
         market_intel_time="10:00",
+        power_law_time="09:00",
         coach_motivation_time="12:00",
         coach_checkin_time="20:00",
     )
@@ -245,6 +257,25 @@ async def _run_market_intel():
         logger.info("market_intel_sent", success=data.get("success"))
     except Exception as e:
         logger.exception("Market intel job failed", error=str(e))
+
+
+async def _run_power_law():
+    """Send the 09:00 48-Laws-of-Power lesson."""
+    if not settings.owner_chat_id:
+        return
+    try:
+        async with async_session() as session:
+            user_repo = UserRepository(session)
+            user = await user_repo.get_or_create(settings.owner_chat_id)
+        data = await get_daily_law_lesson(user.id)
+        text = format_lesson_for_telegram(data)
+        await telegram_service.send_message(settings.owner_chat_id, text)
+        # Persist so the user's drill answer lands as a reply to this lesson.
+        if data.get("success"):
+            await save_message(user.id, "assistant", text)
+        logger.info("power_law_sent", success=data.get("success"), law=data.get("law"))
+    except Exception as e:
+        logger.exception("Power law job failed", error=str(e))
 
 
 async def _run_coach_motivation():

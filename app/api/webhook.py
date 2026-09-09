@@ -22,6 +22,7 @@ from app.scheduler.jobs import (
     _run_coach_motivation,
     _run_daily_briefing,
     _run_market_intel,
+    _run_power_law,
     scheduler,
 )
 from app.services import health
@@ -116,6 +117,14 @@ async def trigger_market_intel(request: Request):
     _check_admin(request)
     asyncio.create_task(_run_market_intel())
     return {"ok": True, "message": "market intel dispatched"}
+
+
+@router.post("/admin/trigger-power-law")
+async def trigger_power_law(request: Request):
+    """Manually fire today's 48 Laws of Power lesson."""
+    _check_admin(request)
+    asyncio.create_task(_run_power_law())
+    return {"ok": True, "message": "power law dispatched"}
 
 
 @router.post("/admin/trigger-coach-motivation")

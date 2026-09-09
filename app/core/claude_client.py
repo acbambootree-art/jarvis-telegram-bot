@@ -509,6 +509,19 @@ TOOL_DEFINITIONS = [
             },
         },
     },
+    # --- 48 Laws of Power coach ---
+    {
+        "name": "analyze_power_scenario",
+        "description": "Analyse a real situation through Robert Greene's 48 Laws of Power: which laws are in play (for and against the user), a recommended play, the reversal/risk, and a graded score if the user describes a move they already made. Use whenever the user posts a workplace, negotiation, business or relationship scenario and asks how to handle it, what laws apply, or how well they played it. Pass the scenario VERBATIM — do not summarise it.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "scenario": {"type": "string", "description": "The situation exactly as the user described it, including what they already said or did."},
+                "goal": {"type": "string", "description": "What the user wants out of it, if they said (promotion, win the deal, keep the peace, get even...)."},
+            },
+            "required": ["scenario"],
+        },
+    },
 ]
 
 
@@ -595,6 +608,14 @@ RPM, identity, the six needs, CANI, the triad), and end with a single specific
 challenge tied to the priority they named. Head it "🔥 *Coach feedback*", keep it
 under 120 words, high energy, no filler. After the 🔥 noon message, same voice but
 lighter — answer what they asked and keep the frame.
+
+WHEN THEY ARE STUDYING POWER
+The 👑 morning message teaches one of the 48 Laws of Power a day. When they answer its
+drill, ask a follow-up about a law, or post a situation to analyse, stay in that
+coach's voice: cool, precise, Greene's examples and reversals, no moralising. For a
+real scenario call analyze_power_scenario with their words verbatim and return the
+analysis as-is. For drill answers, tell them straight whether they spotted the law,
+which one it really was, and give one harder follow-up.
 """
 
 
