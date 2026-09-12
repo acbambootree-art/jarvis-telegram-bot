@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 import structlog
 import httpx
 
@@ -10,17 +12,44 @@ logger = structlog.get_logger()
 TELEGRAM_API = f"https://api.telegram.org/bot{settings.telegram_bot_token}"
 
 
+class TelegramSendError(RuntimeError):
+    """A message could not be delivered, not even stripped of Markdown.
+
+    Raised rather than returned so a caller cannot record an undelivered
+    message as sent by forgetting to check a boolean.
+    """
+
+
+# Ring buffer of recent delivery failures, surfaced by /admin/diag.
+RECENT_SEND_FAILURES: list[dict] = []
+_MAX_SEND_FAILURES = 20
+
+# Alerts are throttled so one bad batch does not become a flood.
+_last_alert_at: datetime | None = None
+_ALERT_COOLDOWN_SECONDS = 900
+
+
+def _record_failure(entry: dict):
+    RECENT_SEND_FAILURES.append(entry)
+    if len(RECENT_SEND_FAILURES) > _MAX_SEND_FAILURES:
+        del RECENT_SEND_FAILURES[: len(RECENT_SEND_FAILURES) - _MAX_SEND_FAILURES]
+
+
 class TelegramService:
     def __init__(self):
         self.token = settings.telegram_bot_token
 
-    async def send_message(self, chat_id: int | str, text: str) -> bool:
+    async def send_message(
+        self, chat_id: int | str, text: str, _is_alert: bool = False
+    ) -> bool:
         """Send a text message. Auto-splits if over 4096 chars.
 
-        Returns True only if every chunk was delivered successfully.
+        Returns True when every chunk was delivered. Raises TelegramSendError
+        if any chunk could not be delivered even as plain text — callers must
+        not go on to record an undelivered message as sent.
         """
         chunks = self._split_message(text, max_length=4096)
-        all_ok = True
+        failures: list[dict] = []
         async with httpx.AsyncClient() as client:
             for chunk in chunks:
                 resp = await client.post(
@@ -54,8 +83,49 @@ class TelegramService:
                         body=retry.text[:500],
                         chat_id=chat_id,
                     )
-                    all_ok = False
-        return all_ok
+                    failures.append({
+                        "ts": datetime.now(timezone.utc).isoformat(),
+                        "chat_id": str(chat_id),
+                        "status": retry.status_code,
+                        "body": retry.text[:300],
+                        "preview": chunk[:120],
+                        "is_alert": _is_alert,
+                    })
+
+        if failures:
+            for f in failures:
+                _record_failure(f)
+            if not _is_alert:
+                await self._alert_owner(failures[0])
+            raise TelegramSendError(
+                f"{len(failures)} chunk(s) undelivered to {chat_id}: "
+                f"status={failures[0]['status']} {failures[0]['body'][:120]}"
+            )
+        return True
+
+    async def _alert_owner(self, failure: dict):
+        """Best-effort heads-up that something was swallowed.
+
+        Most failures are content-specific (bad Markdown entity, oversized
+        payload), so a short plain message usually still gets through. Sent
+        with _is_alert so a failing alert cannot recurse.
+        """
+        global _last_alert_at
+        if not settings.owner_chat_id:
+            return
+        now = datetime.now(timezone.utc)
+        if _last_alert_at and (now - _last_alert_at).total_seconds() < _ALERT_COOLDOWN_SECONDS:
+            return
+        _last_alert_at = now
+        note = (
+            "⚠️ Jarvis could not deliver a message.\n\n"
+            f"Telegram said {failure['status']}: {failure['body'][:200]}\n\n"
+            f"It began: {failure['preview']}"
+        )
+        try:
+            await self.send_message(settings.owner_chat_id, note, _is_alert=True)
+        except Exception as e:
+            logger.error("telegram_alert_failed", error=str(e))
 
     async def send_typing_action(self, chat_id: int | str):
         """Show typing indicator."""

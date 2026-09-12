@@ -27,7 +27,7 @@ from app.scheduler.jobs import (
 )
 from app.services import health
 from app.services.reminders import check_and_send_reminders
-from app.services.telegram import telegram_service
+from app.services.telegram import RECENT_SEND_FAILURES, telegram_service
 from app.services.whatsapp import whatsapp_service
 
 logger = structlog.get_logger()
@@ -81,6 +81,7 @@ async def diag(request: Request):
         "recent_tool_calls": RECENT_TOOL_CALLS[-15:],
         "recent_errors": RECENT_ERRORS[-10:],
         "recent_heartbeats": RECENT_HEARTBEATS[-6:],
+        "recent_send_failures": RECENT_SEND_FAILURES[-10:],
         "recent_reminders": [
             {
                 "id": str(r.id),
@@ -235,7 +236,10 @@ async def _handle_message_whatsapp(message: dict):
         })
         if len(RECENT_ERRORS) > _MAX_ERRORS:
             del RECENT_ERRORS[: len(RECENT_ERRORS) - _MAX_ERRORS]
-        await whatsapp_service.send_message(chat_id, "Sorry, I hit an error. Please try again.")
+        try:
+            await whatsapp_service.send_message(chat_id, "Sorry, I hit an error. Please try again.")
+        except Exception:
+            logger.error("error_reply_undeliverable", chat_id=chat_id)
 
 
 async def _handle_message(message: dict):
@@ -263,6 +267,9 @@ async def _handle_message(message: dict):
         })
         if len(RECENT_ERRORS) > _MAX_ERRORS:
             del RECENT_ERRORS[: len(RECENT_ERRORS) - _MAX_ERRORS]
-        await telegram_service.send_message(
-            chat_id, "Sorry, I encountered an error processing your message. Please try again."
-        )
+        try:
+            await telegram_service.send_message(
+                chat_id, "Sorry, I encountered an error processing your message. Please try again."
+            )
+        except Exception:
+            logger.error("error_reply_undeliverable", chat_id=chat_id)
