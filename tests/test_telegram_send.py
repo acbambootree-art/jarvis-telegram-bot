@@ -57,6 +57,12 @@ def demo():
         assert not tg.RECENT_SEND_FAILURES
         assert client.calls[0]["parse_mode"] == "Markdown"
 
+        # Underscores in bare URLs are escaped; link targets and prose are not.
+        assert tg._escape_urls("see (https://x.sg/mr04026_new-bizsg.pdf) _hi_") == (
+            r"see (https://x.sg/mr04026\_new-bizsg.pdf) _hi_"
+        )
+        assert tg._escape_urls("[doc](https://x.sg/a_b)") == "[doc](https://x.sg/a_b)"
+
         # Markdown rejected, plain-text fallback delivers it.
         outcome, client = run([400, 200])
         assert outcome == "sent", outcome

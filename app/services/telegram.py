@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from datetime import datetime, timezone
 
 import structlog
@@ -29,6 +30,19 @@ _last_alert_at: datetime | None = None
 _ALERT_COOLDOWN_SECONDS = 900
 
 
+# Bare URLs, not the target half of a [text](url) link.
+_BARE_URL = re.compile(r"(?<!\]\()https?://[^\s)]+")
+
+
+def _escape_urls(text: str) -> str:
+    """Escape _ and * inside bare URLs. Legacy Markdown reads the _ in
+    ".../mr04026_new-bizsg..." as an unclosed italic and rejects the whole
+    message, so it arrives as plain text with raw asterisks."""
+    return _BARE_URL.sub(
+        lambda m: m.group(0).replace("_", r"\_").replace("*", r"\*"), text
+    )
+
+
 def _record_failure(entry: dict):
     RECENT_SEND_FAILURES.append(entry)
     if len(RECENT_SEND_FAILURES) > _MAX_SEND_FAILURES:
@@ -56,7 +70,7 @@ class TelegramService:
                     f"{TELEGRAM_API}/sendMessage",
                     json={
                         "chat_id": chat_id,
-                        "text": chunk,
+                        "text": _escape_urls(chunk),
                         "parse_mode": "Markdown",
                     },
                 )
