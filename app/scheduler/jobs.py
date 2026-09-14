@@ -21,7 +21,11 @@ from app.services.coach import (
     get_evening_checkin,
 )
 from app.services.market_intel import format_for_telegram as format_market_intel
-from app.services.power_laws import format_lesson_for_telegram, get_daily_law_lesson
+from app.services.power_laws import (
+    format_lesson_for_telegram,
+    get_daily_law_lesson,
+    get_daily_strategy_lesson,
+)
 from app.services.market_intel import get_daily_market_intel
 from app.services.reminders import check_and_send_reminders
 from app.services.telegram import telegram_service
@@ -68,6 +72,16 @@ def start_scheduler():
         _run_power_law,
         trigger=CronTrigger(hour=9, minute=0, timezone=tz),
         id="power_law",
+        replace_existing=True,
+        misfire_grace_time=3600,
+        coalesce=True,
+    )
+
+    # 33 Strategies of War: one strategy a day at 18:00
+    scheduler.add_job(
+        _run_war_strategy,
+        trigger=CronTrigger(hour=18, minute=0, timezone=tz),
+        id="war_strategy",
         replace_existing=True,
         misfire_grace_time=3600,
         coalesce=True,
@@ -137,6 +151,7 @@ def start_scheduler():
         briefing_time=settings.briefing_time,
         market_intel_time="10:00",
         power_law_time="09:00",
+        war_strategy_time="18:00",
         coach_motivation_time="12:00",
         coach_checkin_time="20:00",
     )
@@ -259,23 +274,33 @@ async def _run_market_intel():
         logger.exception("Market intel job failed", error=str(e))
 
 
-async def _run_power_law():
-    """Send the 09:00 48-Laws-of-Power lesson."""
+async def _send_lesson(make_lesson, log_key: str):
+    """Generate a coaching lesson, deliver it, then record it in history."""
     if not settings.owner_chat_id:
         return
     try:
         async with async_session() as session:
             user_repo = UserRepository(session)
             user = await user_repo.get_or_create(settings.owner_chat_id)
-        data = await get_daily_law_lesson(user.id)
+        data = await make_lesson(user.id)
         text = format_lesson_for_telegram(data)
         await telegram_service.send_message(settings.owner_chat_id, text)
         # Persist so the user's drill answer lands as a reply to this lesson.
         if data.get("success"):
             await save_message(user.id, "assistant", text)
-        logger.info("power_law_sent", success=data.get("success"), law=data.get("law"))
+        logger.info(log_key, success=data.get("success"), number=data.get("law") or data.get("strategy"))
     except Exception as e:
-        logger.exception("Power law job failed", error=str(e))
+        logger.exception("Coaching lesson job failed", job=log_key, error=str(e))
+
+
+async def _run_power_law():
+    """Send the 09:00 48-Laws-of-Power lesson."""
+    await _send_lesson(get_daily_law_lesson, "power_law_sent")
+
+
+async def _run_war_strategy():
+    """Send the 18:00 33-Strategies-of-War lesson."""
+    await _send_lesson(get_daily_strategy_lesson, "war_strategy_sent")
 
 
 async def _run_coach_motivation():

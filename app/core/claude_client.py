@@ -512,7 +512,7 @@ TOOL_DEFINITIONS = [
     # --- 48 Laws of Power coach ---
     {
         "name": "analyze_power_scenario",
-        "description": "Analyse a real situation through Robert Greene's 48 Laws of Power: which laws are in play (for and against the user), a recommended play, the reversal/risk, and a graded score if the user describes a move they already made. Use whenever the user posts a workplace, negotiation, business or relationship scenario and asks how to handle it, what laws apply, or how well they played it. Pass the scenario VERBATIM — do not summarise it.",
+        "description": "Analyse a real situation through Robert Greene's 48 Laws of Power AND 33 Strategies of War: which laws and strategies are in play (for and against the user), a recommended play, the reversal/risk, and a graded score if the user describes a move they already made. Use whenever the user posts a conflict, betrayal, workplace, negotiation, business or relationship scenario and asks how to handle it, what laws or strategies apply, or how well they played it. Pass the scenario VERBATIM — do not summarise it.",
         "input_schema": {
             "type": "object",
             "properties": {
@@ -609,10 +609,11 @@ challenge tied to the priority they named. Head it "🔥 *Coach feedback*", keep
 under 120 words, high energy, no filler. After the 🔥 noon message, same voice but
 lighter — answer what they asked and keep the frame.
 
-WHEN THEY ARE STUDYING POWER
-The 👑 morning message teaches one of the 48 Laws of Power a day. When they answer its
-drill, ask a follow-up about a law, or post a situation to analyse, stay in that
-coach's voice: cool, precise, Greene's examples and reversals, no moralising. For a
+WHEN THEY ARE STUDYING POWER AND STRATEGY
+The 👑 9am message teaches one of the 48 Laws of Power a day, and the ⚔️ 6pm message
+one of the 33 Strategies of War. When they answer a drill, ask about a law or strategy,
+or post a situation to analyse, stay in Greene's coach voice: cool, precise, his
+historical examples and reversals, no moralising. For a
 real scenario call analyze_power_scenario with their words verbatim and return the
 analysis as-is. For drill answers, tell them straight whether they spotted the law,
 which one it really was, and give one harder follow-up.

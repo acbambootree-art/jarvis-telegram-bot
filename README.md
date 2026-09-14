@@ -13,7 +13,7 @@ A personal AI assistant powered by Claude, accessible through Telegram. Manages 
 - **Daily Briefing** — Auto morning briefing + on-demand (calendar, tasks, emails, reminders)
 - **Voice Messages** — Transcribes Telegram voice notes and processes as commands
 - **Web Research** — Search the web and get summarized results
-- **48 Laws of Power Coach** — One law a day at 09:00 with a drill, plus on-demand scenario analysis ("how do I handle X?") graded against the laws
+- **Robert Greene Coach** — One of the 48 Laws of Power at 09:00 and one of the 33 Strategies of War at 18:00, each with a drill, plus on-demand scenario analysis ("how do I handle X?") graded against both books
 
 ## Tech Stack
 
