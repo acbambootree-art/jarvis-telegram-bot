@@ -288,7 +288,7 @@ async def _send_lesson(make_lesson, log_key: str):
         # Persist so the user's drill answer lands as a reply to this lesson.
         if data.get("success"):
             await save_message(user.id, "assistant", text)
-        logger.info(log_key, success=data.get("success"), number=data.get("law") or data.get("strategy"))
+        logger.info(log_key, success=data.get("success"), klass=data.get("class"), attempt=data.get("attempt"))
     except Exception as e:
         logger.exception("Coaching lesson job failed", job=log_key, error=str(e))
 

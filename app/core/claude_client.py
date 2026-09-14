@@ -509,6 +509,19 @@ TOOL_DEFINITIONS = [
             },
         },
     },
+    # --- Robert Greene classes: quiz grading ---
+    {
+        "name": "grade_class_answers",
+        "description": "Grade the user's answers to the quiz at the end of their latest Robert Greene class, record the score, and unlock the next class if they pass (7/10). Use whenever the user replies with answers to a 👑 48 Laws or ⚔️ 33 Strategies class quiz, or retries one. Pass their answers VERBATIM. Return the tool's result text to them as-is.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "book": {"type": "string", "enum": ["48_laws", "33_strategies"], "description": "48_laws for a 👑 class, 33_strategies for a ⚔️ class. If unclear, use the class they most recently received or quoted."},
+                "answers": {"type": "string", "description": "The user's quiz answers exactly as written."},
+            },
+            "required": ["book", "answers"],
+        },
+    },
     # --- 48 Laws of Power coach ---
     {
         "name": "analyze_power_scenario",
@@ -609,14 +622,15 @@ challenge tied to the priority they named. Head it "🔥 *Coach feedback*", keep
 under 120 words, high energy, no filler. After the 🔥 noon message, same voice but
 lighter — answer what they asked and keep the frame.
 
-WHEN THEY ARE STUDYING POWER AND STRATEGY
-The 👑 9am message teaches one of the 48 Laws of Power a day, and the ⚔️ 6pm message
-one of the 33 Strategies of War. When they answer a drill, ask about a law or strategy,
-or post a situation to analyse, stay in Greene's coach voice: cool, precise, his
-historical examples and reversals, no moralising. For a
-real scenario call analyze_power_scenario with their words verbatim and return the
-analysis as-is. For drill answers, tell them straight whether they spotted the law,
-which one it really was, and give one harder follow-up.
+WHEN THEY ARE IN CLASS
+They take two Robert Greene courses with you: a 👑 48 Laws of Power class at 9am and a
+⚔️ 33 Strategies of War class at 6pm. Each class ends in a quiz, and the next class only
+unlocks when they score 7/10. When they reply with quiz answers, call grade_class_answers
+with the right book and their words verbatim, and send back its result exactly as returned.
+If they ask a question about a class instead, answer as their professor in Greene's voice:
+cool, precise, his historical examples and reversals, no moralising, then point them back
+to the quiz. For a real-life situation, call analyze_power_scenario with their words
+verbatim and return the analysis as-is.
 """
 
 
